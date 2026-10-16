@@ -34,6 +34,19 @@ final class NotchController {
     /// Long enough for the closing animation (see `NotchMotion`) to finish.
     private let closeAnimationSeconds = 0.9
 
+    /// The local brain's Mac tools reach the window dock and Quick Dock through here.
+    func connect(_ mac: MacControls) {
+        mac.dockWindow = { [weak self] app in try self?.dock.dockWindow(of: app) ?? "" }
+        mac.undockWindow = { [weak self] app in try self?.dock.undockWindow(of: app) ?? "" }
+        mac.setQuickDock = { [state] on in
+            guard AccessibilityAccess.isTrusted else {
+                throw ChatError("Quick Dock needs Accessibility access: System Settings › Privacy & Security › Accessibility.")
+            }
+            state.update { $0.quickDock = on }
+            return on ? "Quick Dock is on." : "Quick Dock is off."
+        }
+    }
+
     init(state: AppState, feed: WidgetFeed, assistant: Assistant, voice: VoiceSession,
          openSettings: @escaping () -> Void, cancelTimer: @escaping (UUID) -> Void) {
         self.state = state
@@ -81,6 +94,11 @@ final class NotchController {
         observeReady()
     }
 
+    /// Windows held on the sides go back where they were (on quitting, so none are left off the screen).
+    func releaseWindows() {
+        dock.sides.releaseAll()
+    }
+
     private func relayout() {
         guard let screen = NSScreen.menuBarScreen else { return }
         let layout = screen.notchLayout
@@ -91,7 +109,7 @@ final class NotchController {
         biggest.videoAspect = 2.4
         biggest.offersVideo = true
         biggest.showsCaption = true
-        biggest.captionHeight = NotchLayout.maxCaptionHeight
+        biggest.captionHeight = max(NotchLayout.maxCaptionHeight, NotchLayout.maxSummaryHeight)
         let open = biggest.frame(for: .open)
         panel.setFrame(CGRect(x: open.minX - glowMargin, y: open.minY - glowMargin,
                               width: open.width + glowMargin * 2, height: open.height + glowMargin),

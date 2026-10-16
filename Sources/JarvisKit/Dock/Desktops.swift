@@ -41,11 +41,16 @@ public enum Desktops {
         let sky = skyLight
         guard let main = symbol("SLSMainConnectionID", in: sky, as: MainConnection.self),
               let spaces = symbol("SLSCopySpacesForWindows", in: sky, as: SpacesForWindows.self),
-              let windowID = symbol("_AXUIElementGetWindow", in: dlopen(nil, RTLD_NOW), as: WindowOfElement.self)
-        else { return [] }
-        var id: UInt32 = 0
-        guard windowID(window, &id) == .success else { return [] }
+              let id = windowID(of: window) else { return [] }
         return spaces(main(), 7, [id] as CFArray)?.takeRetainedValue() as? [Int] ?? []
+    }
+
+    /// The WindowServer's number for a window (what screen capture and `CGWindowList` call it).
+    public static func windowID(of window: AXUIElement) -> UInt32? {
+        guard let get = symbol("_AXUIElementGetWindow", in: dlopen(nil, RTLD_NOW), as: WindowOfElement.self)
+        else { return nil }
+        var id: UInt32 = 0
+        return get(window, &id) == .success ? id : nil
     }
 
     /// Every desktop, display by display, in Mission Control's order. Moving a desktop in Mission Control (or

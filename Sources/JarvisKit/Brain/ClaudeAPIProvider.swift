@@ -31,7 +31,9 @@ public struct ClaudeAPIProvider: ChatProvider {
                 ["type": "text", "text": last.text],
             ]
         }
-        let tools = extras.tools
+        // Notion and the Mac tools together, when both are offered ("notion_due", "mac_open_app").
+        let kits = [extras.tools, extras.mac].compactMap { $0 }
+        let tools: ToolKit? = kits.count > 1 ? CombinedKit(kits.flatMap { ($0 as? CombinedKit)?.kits ?? [$0] }) : kits.first
         let fullSystem = tools.map { system + "\n\n" + $0.instructions } ?? system
         var total = ChatReply(text: "")
         for _ in 0..<Self.maxToolRounds {

@@ -16,6 +16,11 @@ public struct Turn: Identifiable, Equatable, Sendable {
     public var spoken = false
     /// When the answer arrived; the "last response" tab is offered for a minute after.
     public var answeredAt: Date?
+    /// Answered by the cloud brain (Claude), so it can be summarized.
+    public var cloud = false
+    /// The answer as points (the caption's Summarize button); nil until asked for.
+    public var summary: Summary?
+    public var summarizing = false
 
     public init(question: String, asked: Date = .now, spoken: Bool = false) {
         self.question = question

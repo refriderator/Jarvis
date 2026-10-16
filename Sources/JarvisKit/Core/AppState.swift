@@ -19,6 +19,8 @@ public final class AppState {
     public private(set) var captionActive = false
     /// The user clicked the caption to keep it on screen, in full, until they click off.
     public private(set) var captionPinned = false
+    /// The caption shows the answer's summary instead of the answer.
+    public private(set) var showsSummary = false
     public private(set) var timers: [JarvisTimer] = []
     /// Today's calendar events for the open notch; empty without Calendar access.
     public private(set) var agenda: [AgendaItem] = []
@@ -98,7 +100,9 @@ public final class AppState {
     private func syncDock() {
         layout.showsShelf = dock.showsShelf
         layout.browserLarge = dock.tab == .browser && dock.browserLarge && dock.dragging == nil
-        layout.browserMini = dock.browserFullscreen && !video.held && dock.dragging == nil
+        // Only while the Web tab is the one showing: switched to another tab or folded away, its video stays put.
+        layout.browserMini = dock.browserFullscreen && dock.tab == .browser && !dock.contentHidden
+            && !video.held && dock.dragging == nil
         layout.videoAspect = video.held && !video.tucked || video.catching ? video.aspect : nil
         layout.tuckedVideo = video.held && video.tucked ? video.tuckedSize : nil
         layout.offersVideo = video.available || video.held
@@ -145,18 +149,51 @@ public final class AppState {
         turns[last].source = source
     }
 
-    public func finishTurn(_ answer: String, source: String, tokens count: Int) {
+    public func finishTurn(_ answer: String, source: String, tokens count: Int, cloud: Bool = false) {
         guard let last = turns.indices.last else { return }
         turns[last].awaitingCloud = false
         turns[last].answeredAt = .now
         turns[last].answer = Readable.clean(answer)
         turns[last].source = source
         turns[last].tokens = count
+        turns[last].cloud = cloud
         syncCaption()
-        if count > 0 {
-            tokens.add(count)
-            usage.save(tokens)
-        }
+        countTokens(count)
+    }
+
+    private func countTokens(_ count: Int) {
+        guard count > 0 else { return }
+        tokens.add(count)
+        usage.save(tokens)
+    }
+
+    // MARK: Summary
+
+    /// Summarize was clicked: keep the caption (reading points takes a while) and wait for them.
+    public func beginSummary() {
+        guard captionActive, let last = turns.indices.last else { return }
+        turns[last].summarizing = true
+        captionPinned = true
+        showsSummary = true
+        syncCaption()
+    }
+
+    /// The points came back, or nil when they didn't (the answer shows again).
+    public func finishSummary(_ summary: Summary?, tokens count: Int) {
+        guard let last = turns.indices.last, turns[last].summarizing else { return }
+        turns[last].summarizing = false
+        turns[last].summary = summary
+        turns[last].tokens += count
+        if summary == nil { showsSummary = false }
+        syncCaption()
+        countTokens(count)
+    }
+
+    /// Switches between the summary and the full answer once there is a summary.
+    public func toggleSummary() {
+        guard turns.last?.summary != nil else { return }
+        showsSummary.toggle()
+        syncCaption()
     }
 
     public func failTurn(_ message: String) {
@@ -184,6 +221,7 @@ public final class AppState {
 
     private func startCaption() {
         captionActive = true
+        showsSummary = false
         syncCaption()
     }
 
@@ -192,6 +230,7 @@ public final class AppState {
         guard captionActive || captionPinned else { return }
         captionActive = false
         captionPinned = false
+        showsSummary = false
         syncCaption()
     }
 
@@ -234,9 +273,14 @@ public final class AppState {
 
     private func syncCaption() {
         layout.showsCaption = captionActive
-        layout.captionHeight = captionPinned
-            ? NotchLayout.captionHeight(forAnswerLength: turns.last?.answer?.count ?? 0)
-            : NotchLayout.defaultCaptionHeight
+        if showsSummary, let summary = turns.last?.summary {
+            // Taller than a kept answer: the panel drops further for the points, formula and chart.
+            layout.captionHeight = NotchLayout.summaryHeight(for: summary)
+        } else {
+            layout.captionHeight = captionPinned
+                ? NotchLayout.captionHeight(forAnswerLength: turns.last?.answer?.count ?? 0)
+                : NotchLayout.defaultCaptionHeight
+        }
     }
 
     public func resetTokens() {

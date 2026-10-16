@@ -45,13 +45,19 @@ struct ConnectionsTab: View {
             Section {
                 Picker("Cloud brain", selection: state.binding(\.cloudBrain)) {
                     Text("Claude Code (your subscription)").tag(CloudBrain.claudeCode)
+                    Text("Codex (your ChatGPT plan)").tag(CloudBrain.codex)
                     Text("Claude API key").tag(CloudBrain.claude)
                     Text("OpenAI-compatible").tag(CloudBrain.openAICompatible)
                 }
                 switch state.settings.cloudBrain {
                 case .claudeCode:
                     ClaudeSetupRow()
+                        .id("claudeCode")
                     TextField("Model", text: state.binding(\.claudeModel))
+                case .codex:
+                    ClaudeSetupRow(agent: .codex)
+                        .id("codex")
+                    TextField("Model (blank for Codex's default)", text: state.binding(\.codexModel))
                 case .claude:
                     SecretField(state: state, key: .claudeAPIKey, label: "API key")
                     TextField("Model", text: state.binding(\.claudeModel))
@@ -60,6 +66,26 @@ struct ConnectionsTab: View {
                     TextField("Base URL", text: state.binding(\.compatibleBaseURL))
                     TextField("Model", text: state.binding(\.compatibleModel))
                     SecretField(state: state, key: .compatibleAPIKey, label: "API key (optional)")
+                }
+                if state.settings.cloudBrain != .openAICompatible {
+                    Picker(state.settings.cloudBrain == .codex ? "Codex's access" : "Claude's access", selection: state.binding(\.claudeAccess)) {
+                        Text("None").tag(ClaudeAccess.none)
+                        Text("Tools").tag(ClaudeAccess.tools)
+                        Text("Full").tag(ClaudeAccess.full)
+                    }
+                    .pickerStyle(.segmented)
+                    switch state.settings.claudeAccess {
+                    case .none:
+                        note(state.settings.cloudBrain == .codex ? "Codex can search the web, read Notion and see a camera photo, nothing on this Mac." : "Claude can search the web, read Notion and see a camera photo, nothing on this Mac.")
+                    case .tools:
+                        note("Claude can also open apps, dock windows, turn Quick Dock on and off, set timers, and add, "
+                             + "move and delete calendar events.")
+                    case .full:
+                        note(state.settings.cloudBrain != .claude
+                             ? "Claude can also run commands and read and edit any file in your home folder, without "
+                               + "asking first. A misheard question can change things, so use it with care."
+                             : "Running commands needs Claude Code or Codex; with an API key this is the same as Tools.")
+                    }
                 }
                 Toggle("Token saving", isOn: state.binding(\.askBeforeCloud))
                 note("Asks before a question goes to the cloud brain, so tokens are only used when you say so. "

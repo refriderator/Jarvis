@@ -35,7 +35,7 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Dragging a window onto the notch holds it there (needs Accessibility).
     public var holdWindows = true
     /// One window at a time on each desktop of each display: the window in front fills it and every other one
-    /// there is set aside in the strip (up to 6 per desktop). It won't turn on with more than 7 windows on a
+    /// there is set aside on the sides of the screen (up to 6 per desktop). It won't turn on with more than 7 windows on a
     /// desktop, and turns itself off when a desktop is moved in Mission Control.
     public var quickDock = false
     /// Folders pinned to the Finder tab's sidebar, as paths.
@@ -49,8 +49,12 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Who answers what the local brain can't.
     public var cloudBrain: CloudBrain = .claudeCode
     public var claudeModel = "claude-opus-5-5"
+    /// Empty: Codex's own default.
+    public var codexModel = ""
     /// Token saving: ask before a question goes to the cloud brain.
     public var askBeforeCloud = false
+    /// What Claude may do on this Mac: nothing, Jarvis's tools, or everything (Claude Code's own commands and files).
+    public var claudeAccess: ClaudeAccess = .none
     /// Answers small questions on this Mac before anything goes to the cloud.
     public var localBrain: LocalBrain = .apple
     /// The local brain tries everything (writing, maths, code, tools); only news and the camera skip it.
@@ -82,6 +86,15 @@ public struct Settings: Codable, Equatable, Sendable {
 
 extension OpenTrigger: Codable {}
 
+public enum ClaudeAccess: String, Codable, Sendable, CaseIterable {
+    /// Web search, Notion and the camera, as before.
+    case none
+    /// Plus Jarvis's tools: apps, windows, Quick Dock, timers and the calendar.
+    case tools
+    /// Plus, with Claude Code, running commands and reading and editing files, without asking first.
+    case full
+}
+
 public enum TalkMode: String, Codable, Sendable, CaseIterable {
     case pushToHold, toggle
 }
@@ -95,6 +108,8 @@ public enum CloudBrain: String, Codable, Sendable, CaseIterable {
     case claudeCode
     /// Claude API with a key.
     case claude
+    /// The user's own Codex, so their ChatGPT plan.
+    case codex
     case openAICompatible
 }
 

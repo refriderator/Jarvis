@@ -8,6 +8,8 @@
     <string>Jarvis</string>
     <key>CFBundleIdentifier</key>
     <string>io.github.jarvis-public</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>Jarvis</string>
     <key>CFBundlePackageType</key>

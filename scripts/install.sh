@@ -41,9 +41,12 @@ scripts/bundle.sh release
 step "[4/4] Installing in Applications"
 osascript -e 'tell application id "io.github.jarvis-public" to quit' >/dev/null 2>&1 || true
 sleep 1
-rm -rf /Applications/Jarvis.app
-ditto build/Jarvis.app /Applications/Jarvis.app
-open /Applications/Jarvis.app
+# Update the copy already installed wherever it was moved to (a folder inside Applications), so there's only ever one.
+TARGET="$(find /Applications -maxdepth 2 -name Jarvis.app -type d 2>/dev/null | head -1)"
+TARGET="${TARGET:-/Applications/Jarvis.app}"
+rm -rf "$TARGET"
+ditto build/Jarvis.app "$TARGET"
+open "$TARGET"
 
 printf '\n\033[32mJarvis is installed and running.\033[0m\n'
 echo "Look for it in the notch at the top of the screen. The first time, it walks you through setup."

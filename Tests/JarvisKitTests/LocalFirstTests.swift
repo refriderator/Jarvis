@@ -129,18 +129,74 @@ struct LocalToolAssistantTests {
         #expect(state.turns.last?.answer?.contains("timer 10 minutes") == true, "cloud can't set timers, so a hint")
     }
 
-    @Test func qwenAddsACalendarEvent() async {
+    @Test func calendarAddsArePlainCodeNotQwen() async {
+        let state = AppState()
+        let calendar = FakeCalendar()
+        let qwen = ScriptedBrain(["unused"])
+        let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil },
+                                  tools: Toolbox(calendar: calendar))
+        await run(assistant, "put study group in my calendar tomorrow at 6pm", state: state)
+        #expect(calendar.items.first?.title == "Study group")
+        #expect(Calendar.current.component(.hour, from: calendar.items.first?.start ?? .distantPast) == 18)
+        #expect(qwen.asked.isEmpty)
+        // A time it can't read isn't guessed into an all-day event.
+        await run(assistant, "put gym in my calendar tomorrow evening around six", state: state)
+        #expect(calendar.items.count == 1)
+    }
+
+    private struct NoApps: AppFinder {
+        func find(_ spoken: String) -> (name: String, url: URL)? { nil }
+    }
+
+    @Test func aChangeItCantMakeOffersToOpenTheAppThenWaitsForYes() async {
+        let state = AppState()
+        let qwen = ScriptedBrain(["ESCALATE"])
+        let cloud = FakeBrain("Claude", answer: "unused")
+        let tools = Toolbox(calendar: FakeCalendar(), apps: AppLauncher(finder: NoApps(), player: FakePlayer()))
+        let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in cloud }, tools: tools)
+        await run(assistant, "move my study group on my calendar to a better time", state: state)
+        #expect(state.turns.last?.answer?.contains("better person for the job") == true)
+        #expect(state.turns.last?.answer?.contains("open Calendar?") == true)
+        #expect(cloud.asked.isEmpty, "the cloud brain can't reach the calendar, so it isn't asked")
+        // "no" is answered by code, not sent to a brain; "yes" tries the app (none installed here, so it says so).
+        await run(assistant, "no thanks", state: state)
+        #expect(state.turns.last?.answer == "Okay.")
+        await run(assistant, "move my study group on my calendar to a better time", state: state)
+        await run(assistant, "yes please", state: state)
+        #expect(state.turns.last?.answer == "I couldn't open Calendar.")
+        #expect(qwen.asked.count == 2, "only the two requests reached the local brain")
+    }
+
+    @Test func noOfferForReadsOrForNotionThatIsntConnected() {
+        let tools = Toolbox(calendar: FakeCalendar(), apps: AppLauncher(finder: NoApps(), player: FakePlayer()))
+        #expect(tools.openOffer(for: "what's on my calendar tomorrow") == nil)
+        #expect(tools.openOffer(for: "tick off rice on my groceries list") == nil, "Notion isn't connected")
+        #expect(tools.openOffer(for: "delete my dentist event") == "Calendar")
+    }
+
+    @Test func aModelGoingRoundInCirclesIsNotShownAsAnAnswer() async {
+        let state = AppState()
+        let call = #"{"tool": "calendar_list", "arguments": {"start": "2026-10-17", "end": "2026-10-18"}}"#
+        let qwen = ScriptedBrain([call, call, call])
+        let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil },
+                                  tools: Toolbox(calendar: FakeCalendar()))
+        await run(assistant, "what do i have tomorrow", state: state)
+        #expect(qwen.asked.count == 2, "the repeated call is stopped, not run again")
+        #expect(state.turns.last?.failed == true, "no raw tool result passed off as the answer")
+    }
+
+    @Test func qwenCanOnlyReadTheCalendar() async {
         let state = AppState()
         let calendar = FakeCalendar()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
         let day = tomorrow.formatted(.iso8601.year().month().day())
         let qwen = ScriptedBrain([#"{"tool": "calendar_add", "arguments": {"title": "Study group", "start": "\#(day) 18:00"}}"#,
-                                  "Added study group tomorrow at 6."])
+                                  "ESCALATE"])
         let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil },
                                   tools: Toolbox(calendar: calendar))
-        await run(assistant, "put study group in my calendar for tomorrow evening around six", state: state)
-        #expect(calendar.items.first?.title == "Study group")
-        #expect(Calendar.current.component(.hour, from: calendar.items.first?.start ?? .distantPast) == 18)
+        await run(assistant, "move my study group to a better time", state: state)
+        #expect(calendar.items.isEmpty, "the local brain only gets reading tools")
+        #expect(qwen.asked.last?.last?.text.contains("isn't available") == true)
     }
 
     @Test func qwenWritesTheEmailItself() async {
@@ -239,5 +295,25 @@ struct RealQwenNotionTests {
         await brain.engine.unload()
         print("TOOLS CALLED:", NotionCalls.shared.all)
         #expect(NotionCalls.shared.all.filter { $0 == "due" }.count >= 3)
+    }
+}
+
+struct CodexProviderTests {
+    @Test func readsTheAnswerAndTokensFromItsEvents() throws {
+        let events = """
+            {"type":"thread.started","thread_id":"t"}
+            {"type":"item.completed","item":{"id":"1","type":"reasoning","text":"thinking"}}
+            {"type":"item.completed","item":{"id":"2","type":"agent_message","text":"Paris."}}
+            {"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":800,"output_tokens":12,"reasoning_output_tokens":4}}
+            """
+        let reply = try CodexProvider.parse(Data(events.utf8))
+        #expect(reply.text == "Paris.")
+        #expect(reply.inputTokens == 1200 && reply.outputTokens == 12)
+    }
+
+    @Test func aFailedTurnSaysWhy() {
+        let events = #"{"type":"turn.failed","error":{"message":"You've hit your usage limit."}}"#
+        #expect(throws: ChatError("Codex: You've hit your usage limit.")) { try CodexProvider.parse(Data(events.utf8)) }
+        #expect(throws: ChatError.self) { try CodexProvider.parse(Data()) }
     }
 }

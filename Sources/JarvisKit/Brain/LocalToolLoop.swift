@@ -20,7 +20,8 @@ public enum LocalToolLoop {
         let system = systemPrompt(kits: kits, hint: hint)
         var messages = history
         var total = ChatReply(text: "")
-        var lastResult: String?
+        var lastDone: String?
+        var seen = Set<String>()
         for _ in 0..<maxRounds {
             let reply = try await model.reply(system: system, history: messages)
             total.inputTokens += reply.inputTokens
@@ -40,19 +41,23 @@ public enum LocalToolLoop {
                              ChatMessage(.user, "There is no tool called \(call.tool). Use one from the list, or answer.")]
                 continue
             }
+            // The same call twice is a model going round in circles, so stop and let a better brain have it.
+            guard seen.insert(call.tool + String(decoding: call.arguments, as: UTF8.self)).inserted else { break }
             let name = String(call.tool.dropFirst(kit.name.count + 1))
             let result: String
             do {
                 result = try await kit.call(name, arguments: call.arguments)
-                lastResult = result
+                // Only a timer or a Mac action is a thing done. A search result is not an answer, however many were found.
+                if kit.name == "timer" || kit.name == "mac" { lastDone = result }
             } catch {
                 result = "Error: \(error.localizedDescription)"
             }
             messages += [ChatMessage(.assistant, reply.text), ChatMessage(.user, "Result of \(call.tool):\n\(result)")]
         }
         // Out of rounds: if something was done, say so rather than handing it to the cloud to do twice.
-        guard let lastResult else { throw ChatError("The local brain couldn't finish that.") }
-        total.text = lastResult
+        // Otherwise it never got to an answer, and showing its last search result would be a confident wrong one.
+        guard let lastDone else { throw ChatError("The local brain couldn't finish that.") }
+        total.text = lastDone
         return total
     }
 

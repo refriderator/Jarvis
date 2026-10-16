@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var voice: VoiceSession?
     private lazy var downloader = ModelDownloader(state: state)
     private var notch: NotchController?
+    private var relay: ToolRelay.Server?
     private let settingsWindow = WindowPresenter()
     private let welcomeWindow = WindowPresenter()
 
@@ -21,12 +22,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Accessory app: no Dock icon, notch and menu keep working.
         NSApp.setActivationPolicy(.accessory)
         let music = MusicAppsPlayer()
-        let feed = WidgetFeed(state: state, player: music,
-                              weather: OpenMeteoWeather(locator: CurrentLocation()), calendar: calendar,
+        let weather = OpenMeteoWeather(locator: CurrentLocation())
+        let feed = WidgetFeed(state: state, player: music, weather: weather, calendar: calendar,
                               notion: { [state] in state.secret(.notionToken).map { NotionAPI(token: $0) } })
         feed.start()
         let state = state
-        let tools = Toolbox(timers: timers, calendar: calendar, camera: MacCamera(), apps: AppLauncher(player: music),
+        let launcher = AppLauncher(player: music)
+        let mac = MacControls()
+        mac.openApp = { name in
+            guard let opened = launcher.open(name) else { throw ChatError("No app called \(name) is installed.") }
+            return "Opened \(opened)."
+        }
+        let tools = Toolbox(timers: timers, calendar: calendar, camera: MacCamera(), apps: launcher, mac: mac, weather: weather,
                             notion: { state.secret(.notionToken).map { NotionTools(token: $0) } })
         let assistant = Assistant(state: state, makeLocal: { Brains.local($0, engine: self.engine) },
                                   makeCloud: { Brains.cloud($0, secret: state.secret) }, tools: tools,
@@ -39,6 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.state.send(.dismiss)
             self?.showSettings()
         }, cancelTimer: { [weak self] in self?.timers.cancel($0) })
+        notch?.connect(mac)
+        // Claude Code's calls to the Mac tools arrive here, while Claude's access allows them.
+        let relay = ToolRelay.Server(kit: { tools.cloudMacKit() ?? CombinedKit([]) },
+                                     allowed: { state.settings.claudeAccess != .none })
+        try? relay.start()
+        self.relay = relay
         if !state.settings.hasCompletedWelcome {
             showWelcome()
         }
@@ -46,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Frees the local model before quitting; ggml's GPU teardown aborts if it is still loaded.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        notch?.releaseWindows()
         Task {
             await engine.unload()
             NSApp.reply(toApplicationShouldTerminate: true)

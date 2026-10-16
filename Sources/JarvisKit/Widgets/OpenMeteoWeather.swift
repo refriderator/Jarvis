@@ -29,8 +29,12 @@ public struct OpenMeteoWeather: WeatherSource {
         url.queryItems = [
             .init(name: "latitude", value: String(coordinate.latitude)),
             .init(name: "longitude", value: String(coordinate.longitude)),
-            .init(name: "current", value: "temperature_2m,apparent_temperature,weather_code,is_day"),
+            .init(name: "current", value: "temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m"),
+            .init(name: "daily", value: "temperature_2m_max,precipitation_probability_max"),
+            .init(name: "forecast_days", value: "1"),
+            .init(name: "timezone", value: "auto"),
             .init(name: "temperature_unit", value: unit.rawValue),
+            .init(name: "wind_speed_unit", value: unit == .fahrenheit ? "mph" : "kmh"),
         ]
         let (data, _) = try await URLSession.shared.data(from: url.url!)
         var report = try Self.parseForecast(data, unit: unit)
@@ -55,13 +59,22 @@ public struct OpenMeteoWeather: WeatherSource {
                 let apparent_temperature: Double?
                 let weather_code: Int
                 let is_day: Int
+                let wind_speed_10m: Double?
+            }
+            struct Daily: Decodable {
+                let temperature_2m_max: [Double?]?
+                let precipitation_probability_max: [Int?]?
             }
             let current: Current
+            let daily: Daily?
         }
-        let current = try JSONDecoder().decode(Response.self, from: data).current
+        let response = try JSONDecoder().decode(Response.self, from: data)
+        let current = response.current
         return WeatherReport(temperature: current.temperature_2m, unit: unit,
                              code: current.weather_code, isDay: current.is_day == 1,
-                             feelsLike: current.apparent_temperature)
+                             feelsLike: current.apparent_temperature, wind: current.wind_speed_10m,
+                             high: response.daily?.temperature_2m_max?.first ?? nil,
+                             precipitationChance: response.daily?.precipitation_probability_max?.first ?? nil)
     }
 
     nonisolated public static func parseGeocode(_ data: Data) throws -> (name: String, coordinate: Coordinate)? {

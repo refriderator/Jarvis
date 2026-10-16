@@ -42,8 +42,8 @@ final class VideoController {
 
     /// The clamshell closing or opening, before anything else moves.
     static let cover = 0.22
-    /// Closing: the video shrinking into the mini spot under the clamshell, before the notch shrinks.
-    static let shrink = 0.2
+    /// Closing: the video moving into the mini spot under the clamshell (`travel`), before the notch shrinks.
+    static let shrink = travel + 0.04
     /// How long the notch takes to grow or shrink before the video is revealed. Shorter than the springs in
     /// `NotchMotion` run: they look settled well before they end, and waiting them out made the reveal ~0.4 s late.
     static let reshape = 0.35
@@ -51,8 +51,10 @@ final class VideoController {
     /// the video at `reshape` put it at its big spot while the panel was still growing out to it, so it showed
     /// past the panel's edge (plain to see on skins with a coloured background and border, like Pink).
     static let reshapeOpening = 0.55
-    /// The clamshell gliding from the video's old spot to its new one, while it covers the move.
-    static let glide = 0.25
+    /// Each half of the clamshell's move from the video's old spot to its new one (see `moveUnderCover`): its far
+    /// corner reaching out, then its near corner drawing in.
+    static let reach = 0.13
+    static let travel = 2 * reach
     /// How long the notch waits before it moves, with a video held (see `NotchView`).
     static func notchDelay(opening: Bool) -> Double { opening ? cover : cover + shrink }
     /// The hole sits `holeInset` inside the video with corners this round. A rounded rectangle inset by d stays
@@ -178,7 +180,9 @@ final class VideoController {
         // narrows around it. Out of Large: the dropdown widens, the video moves into its spot, and the extra depth
         // goes. `settle` takes the move number first, so the steps below share it.
         let deepen = 0.22, moveGap = 0.16
-        settle(after: Self.cover + deepen + moveGap + Self.reshape)
+        // Out of Large the video moves here, in `settle`, while the dropdown is still deep.
+        let settling = Self.cover + deepen + Self.travel + moveGap + Self.reshape
+        settle(after: settling)
         let current = move
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.cover) { [weak self] in
             guard let self, current == move else { return }
@@ -186,18 +190,22 @@ final class VideoController {
             state.updateVideo { $0.tallForTheater = true; if !wanted { $0.theater = false } }
             DispatchQueue.main.asyncAfter(deadline: .now() + deepen) {
                 guard current == self.move else { return }
+                var moving = 0.0
                 if wanted, let window = self.window, let big = self.state.layout.theaterVideoFrame {
-                    self.moveCover(to: self.windows.setFrame(big, of: window) ?? big)
+                    moving = self.moveUnderCover(window, to: big)
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + moveGap) {
+                // The dropdown narrows only once the clamshell has drawn in onto the big spot, so it never pokes
+                // out past the dropdown's edge.
+                DispatchQueue.main.asyncAfter(deadline: .now() + moving + moveGap) {
                     guard current == self.move else { return }
                     self.pendingTheater = nil
                     self.state.updateVideo { $0.theater = wanted }
                 }
             }
         }
-        // Once the video sits in its new spot, the dropdown loses the extra depth, then its text fades back in.
-        let settled: Double = Self.cover + deepen + moveGap + Self.reshape + 0.2
+        // Once the video sits in its new spot (and the clamshell has drawn in), the dropdown loses the extra depth,
+        // then its text fades back in.
+        let settled: Double = settling + Self.travel + 0.1
         DispatchQueue.main.asyncAfter(deadline: .now() + settled) { [weak self] in
             guard let self, current == move else { return }
             state.updateVideo { $0.tallForTheater = false }
@@ -497,9 +505,11 @@ final class VideoController {
         let current = move
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.cover) { [weak self] in
             guard let self, current == move else { return }
-            // The clamshell is shut: the hole fills, and the video can move, the clamshell going with it.
+            // The clamshell is shut: the hole fills, and the video can move, the clamshell going with it. Closing,
+            // it moves into the mini spot inside the still-open dropdown; the notch shrinks once it's there
+            // (`shrink`).
             holeOpen = false
-            if !opening, let window, let spot { moveCover(to: windows.setFrame(spot, of: window) ?? spot) }
+            if !opening, let window, let spot { moveUnderCover(window, to: spot) }
         }
     }
 
@@ -524,45 +534,70 @@ final class VideoController {
     /// takes to follow it there.
     @discardableResult private func place() -> Double {
         guard let window, let spot else { return 0 }
-        var got = windows.setFrame(spot, of: window) ?? spot
+        return moveUnderCover(window, to: spot) { [weak self] got in self?.placed(got, in: spot) }
+    }
+
+    /// The video landed at `got` (asked for `spot`): a browser that won't go that small is remembered, and the
+    /// hole follows macOS nudging it afterwards.
+    private func placed(_ landed: CGRect, in spot: CGRect) {
+        guard let window else { return }
+        var got = landed
         if got.width > spot.width + 1 || got.height > spot.height + 1 {
             // The browser won't make it that small: remember its smallest. The notch makes room for it at once
             // (the layout grows), so the video goes straight to its grown spot; the open dropdown's spot is
             // measured again by SwiftUI, so that one is placed once more a moment later.
             log.debug("video: smallest is \(Int(got.width))x\(Int(got.height))")
             state.updateVideo { $0.minimum = got.size }
-            if let grown = self.spot { got = windows.setFrame(grown, of: window) ?? grown }
+            if let grown = self.spot {
+                got = windows.setFrame(grown, of: window) ?? grown
+                coverAtOnce(got)
+            }
             if state.notch.mode == .open {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.place() }
             }
         }
-        // A point inside the video on every side, so its own edge never shows.
-        let gliding = moveCover(to: got)
-        var instant = Transaction(animation: nil)
-        instant.disablesAnimations = true
         // macOS can still nudge a window this close to the menu bar after saying where it is: look again once
-        // it has settled, and follow it, so the hole is never off the video (it showed as the top cut off).
-        DispatchQueue.main.asyncAfter(deadline: .now() + gliding + 0.15) { [weak self] in
+        // it has settled (and the clamshell has drawn in), and follow it, so the hole is never off the video (it
+        // showed as the top cut off).
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.reach + 0.15) { [weak self] in
             guard let self, let window = self.window, let now = windows.frame(of: window), now != frameOnScreen else { return }
             log.debug("video: moved after placing, \(Int(got.minY)) -> \(Int(now.minY))")
-            withTransaction(instant) { self.frameOnScreen = now }
+            coverAtOnce(now)
         }
-        return gliding
     }
 
-    /// Puts the clamshell over the video's new frame. While it's covering a move it glides there from the old spot
-    /// (the solid notch hides the video meanwhile, its hole filled); on see-through Liquid Glass the video would show
-    /// through behind it, so there, and whenever the video is showing, it's there at once. Returns the glide's length.
-    @discardableResult private func moveCover(to frame: CGRect) -> Double {
-        let glides = state.video.covered && !holeOpen && state.skin.material != .glass && frameOnScreen != nil
-        if glides {
-            withAnimation(.easeInOut(duration: Self.glide)) { frameOnScreen = frame }
-            return Self.glide
+    /// Moves the video to `target` with the clamshell over it the whole way, so neither jumps: the clamshell's
+    /// far corner reaches out until it spans both spots, the video moves underneath, then its near corner draws in
+    /// onto the frame the video got. The video is never outside it, so this works on see-through Liquid Glass too.
+    /// The caller keeps the notch big enough for both spots meanwhile. While the video is showing (no clamshell),
+    /// both just go there at once. `done` gets the frame the video got; returns how long the clamshell takes.
+    @discardableResult
+    private func moveUnderCover(_ window: ForeignWindow, to target: CGRect,
+                                done: @escaping (CGRect) -> Void = { _ in }) -> Double {
+        guard state.video.covered, !holeOpen, let old = frameOnScreen,
+              abs(old.minX - target.minX) + abs(old.minY - target.minY) + abs(old.width - target.width)
+                  + abs(old.height - target.height) > 2 else {
+            let got = windows.setFrame(target, of: window) ?? target
+            coverAtOnce(got)
+            done(got)
+            return 0
         }
+        let current = move
+        withAnimation(.easeIn(duration: Self.reach)) { frameOnScreen = old.union(target) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.reach) { [weak self] in
+            // A newer move (or letting go) took over: it starts from wherever the clamshell is now.
+            guard let self, current == move, state.video.held else { return }
+            let got = windows.setFrame(target, of: window) ?? target
+            withAnimation(.easeOut(duration: Self.reach)) { frameOnScreen = got }
+            done(got)
+        }
+        return Self.travel
+    }
+
+    private func coverAtOnce(_ frame: CGRect) {
         var instant = Transaction(animation: nil)
         instant.disablesAnimations = true
         withTransaction(instant) { frameOnScreen = frame }
-        return 0
     }
 
     // MARK: Dragging the video in and out

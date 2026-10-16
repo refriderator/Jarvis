@@ -109,8 +109,9 @@ private struct TrayView: View {
                     .frame(width: 18, height: 18)
                     .frame(width: Self.slot, height: model.height)
                     .contentShape(Rectangle())
-                    .help("\(app.appName): click to open it full screen, or drag it out")
+                    .help("\(app.appName): click to open it full desktop, drag it out to hold it, right-click to let go of it")
                     .onTapGesture { dock.restore(app) }
+                    .contextMenu { Button("Let Go") { dock.letGo(app) } }
                     .gesture(DragGesture(minimumDistance: 3).onChanged { _ in dock.pullOut(app, icon: icon) })
             }
         }

@@ -17,8 +17,17 @@ public struct DueItem: Identifiable, Equatable, Sendable {
         self.source = source
     }
 
-    /// Its time has passed today, so the notch greys it out. Items with no time stay normal all day.
-    public func isPast(_ now: Date) -> Bool { hasTime && due <= now }
+    /// Its time has passed today, or it's overdue from an earlier day, so the notch greys it out. Items with no
+    /// time stay normal all day.
+    public func isPast(_ now: Date) -> Bool { isOverdue(now) || (hasTime && due <= now) }
+
+    /// Due on an earlier day and still not done.
+    public func isOverdue(_ now: Date) -> Bool { due < Calendar.current.startOfDay(for: now) }
+
+    /// What the "TODAY" list says: its time today, or the day it was due if that has gone ("Oct 14").
+    public func todayText(now: Date) -> String {
+        isOverdue(now) ? due.formatted(.dateTime.month(.abbreviated).day()) : timeText
+    }
 
     /// The time it's due today, or "All day".
     public var timeText: String {
@@ -32,9 +41,11 @@ public struct DueItem: Identifiable, Equatable, Sendable {
 }
 
 extension NotionAPI {
-    /// Everything not yet done with a date from today on, across every shared database that has a date
-    /// column (or only `databaseID`), soonest first. Nil when no database is shared with the integration.
-    public func dueItems(databaseID: String? = nil, days: Int, now: Date = .now) async throws -> [DueItem]? {
+    /// Everything not yet done with a date from today on (and from up to `overdueDays` back), across every shared
+    /// database that has a date column (or only `databaseID`), soonest first. Nil when no database is shared with
+    /// the integration.
+    public func dueItems(databaseID: String? = nil, days: Int, overdueDays: Int = 0,
+                         now: Date = .now) async throws -> [DueItem]? {
         let databases: [[String: Any]]
         if let databaseID {
             databases = [try await send("GET", "databases/\(databaseID)")]
@@ -44,15 +55,19 @@ extension NotionAPI {
             databases = found["results"] as? [[String: Any]] ?? []
         }
         guard !databases.isEmpty else { return nil }
-        let today = Calendar.current.startOfDay(for: now)
-        let end = today.addingTimeInterval(TimeInterval(days) * 86_400)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        // Notion reads a bare date in a filter as midnight UTC, so "before tomorrow" cut off every evening item
+        // west of Greenwich (8 PM on in Toronto). Ask for a day more each side and decide here, in local time.
+        let from = calendar.date(byAdding: .day, value: -overdueDays - 1, to: today) ?? today
+        let to = calendar.date(byAdding: .day, value: days + 1, to: today) ?? today
         var items: [DueItem] = []
         for database in databases {
             let properties = database["properties"] as? [String: [String: Any]] ?? [:]
             guard let id = database["id"] as? String, let dateColumn = Self.dateColumn(properties) else { continue }
             let rows = try await send("POST", "databases/\(id)/query", body: [
-                "filter": ["and": [["property": dateColumn, "date": ["on_or_after": Self.day(today)]],
-                                   ["property": dateColumn, "date": ["before": Self.day(end)]]]],
+                "filter": ["and": [["property": dateColumn, "date": ["on_or_after": Self.day(from)]],
+                                   ["property": dateColumn, "date": ["before": Self.day(to)]]]],
                 "sorts": [["property": dateColumn, "direction": "ascending"]],
                 "page_size": 50,
             ])
@@ -60,7 +75,8 @@ extension NotionAPI {
             for row in rows["results"] as? [[String: Any]] ?? [] {
                 let values = row["properties"] as? [String: [String: Any]] ?? [:]
                 guard !Self.isDone(values), let raw = (values[dateColumn]?["date"] as? [String: Any])?["start"] as? String,
-                      let due = Self.date(raw) else { continue }
+                      let due = Self.date(raw), Self.isWithin(due, days: days, overdueDays: overdueDays, now: now,
+                                                                calendar: calendar) else { continue }
                 items.append(DueItem(id: row["id"] as? String ?? UUID().uuidString, title: Self.title(of: row),
                                      due: due.date, hasTime: due.hasTime, source: source))
             }
@@ -119,10 +135,21 @@ extension NotionAPI {
         }
     }
 
-    /// Notion's "2026-10-16" or "2026-10-16T06:45:00.000-04:00".
-    public static func date(_ text: String) -> (date: Date, hasTime: Bool)? {
+    /// Due from the start of today (local), less `overdueDays`, to `days` days on. A timed item counts by its
+    /// instant; a date-only one (read as local midnight of that date) by its date.
+    public static func isWithin(_ due: (date: Date, hasTime: Bool), days: Int, overdueDays: Int = 0, now: Date,
+                                calendar: Calendar = .current) -> Bool {
+        let today = calendar.startOfDay(for: now)
+        guard let start = calendar.date(byAdding: .day, value: -overdueDays, to: today),
+              let end = calendar.date(byAdding: .day, value: days, to: today) else { return false }
+        return due.date >= start && due.date < end
+    }
+
+    /// Notion's "2026-10-16" (local midnight of that date) or "2026-10-16T06:45:00.000-04:00".
+    public static func date(_ text: String, timeZone: TimeZone = .current) -> (date: Date, hasTime: Bool)? {
         if text.count == 10 {
             let formatter = DateFormatter()
+            formatter.timeZone = timeZone
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.dateFormat = "yyyy-MM-dd"
             return formatter.date(from: text).map { ($0, false) }

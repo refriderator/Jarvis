@@ -32,6 +32,11 @@ public enum CalendarCommand {
         let datePhrase = String(text[dateRange])
         let hasTime = datePhrase.range(of: #"\d\s*(:\d\d)?\s*(am|pm|a\.m\.|p\.m\.)|\d:\d\d|\bnoon\b|\bmidnight\b|\bat \d"#,
                                        options: [.regularExpression, .caseInsensitive]) != nil
+        // A time it couldn't read ("evening around six") would become an all-day event: better to ask for a clear one.
+        if !hasTime, text.range(of: #"\b(morning|afternoon|evening|tonight|night|around|about|o'?clock|ish)\b"#,
+                                options: [.regularExpression, .caseInsensitive]) != nil {
+            return nil
+        }
         var title = text.replacingCharacters(in: dateRange, with: " ")
         for filler in [#"^\s*(please\s+)?(add|put|schedule|create|book|make)\b"#,
                        #"\b(to|on|in|into) my calendar\b"#, #"\bmy calendar\b"#, #"\b(an|a|the) (event|meeting|appointment)\b"#,

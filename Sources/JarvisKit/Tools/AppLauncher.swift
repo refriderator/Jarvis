@@ -41,7 +41,10 @@ public final class InstalledApps: AppFinder {
         let wanted = Self.aliases[words] ?? words
         if let exact = all.first(where: { $0.key.lowercased() == wanted.lowercased() }) { return (exact.key, exact.value) }
         let starts = all.filter { $0.key.lowercased().hasPrefix(wanted.lowercased() + " ") }
-        return starts.count == 1 ? starts.first.map { ($0.key, $0.value) } : nil
+        if starts.count == 1 { return starts.first.map { ($0.key, $0.value) } }
+        // "whats" for WhatsApp: a longer start of one name, when nothing else starts the same way.
+        let begins = all.filter { $0.key.lowercased().hasPrefix(wanted.lowercased()) }
+        return wanted.count >= 4 && begins.count == 1 ? begins.first.map { ($0.key, $0.value) } : nil
     }
 }
 
@@ -64,13 +67,29 @@ public final class AppLauncher {
         return MusicPlayer.allCases.filter { ids.contains($0.rawValue) }
     }
 
+    /// Opens an app by name (Notion falls back to its website when the app isn't installed). The name shown, or nil.
+    @discardableResult
+    public func open(_ spoken: String) -> String? {
+        if let app = finder.find(spoken) {
+            NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
+            return app.name
+        }
+        if spoken.lowercased() == "notion", let site = URL(string: "https://www.notion.so") {
+            NSWorkspace.shared.open(site)
+            return "Notion"
+        }
+        return nil
+    }
+
     public func handle(_ text: String) -> String? {
         guard let command = AppCommand.parse(text) else { return nil }
         switch command {
         case .open(let name):
-            guard let app = finder.find(name) else { return nil }
-            NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
-            return "Opening \(app.name)."
+            if let opened = open(name) { return "Opening \(opened)." }
+            // "open X" is plainly about an app, so say so rather than let a brain pretend it did something.
+            // ("start" and "run" are too loose to claim.)
+            return text.range(of: #"\b(open|launch)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+                ? "I couldn't find an app called \(name)." : nil
         case .control(let control):
             guard let target = runningMusic().first else { return nil }
             switch control {

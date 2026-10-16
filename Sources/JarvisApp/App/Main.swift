@@ -1,7 +1,8 @@
 import JarvisKit
 import SwiftUI
 
-/// Starts the app, or with `--notion-mcp` runs as the Notion MCP server Claude Code talks to.
+/// Starts the app, or with `--notion-mcp` runs as the Notion MCP server Claude Code talks to, or with `--tools-mcp`
+/// as the MCP server that passes Claude Code's calls on to the running app's Mac tools (`ToolRelay`).
 /// `--local-prompt "question"` prints the local model's system prompt and exits.
 @main
 enum Main {
@@ -18,6 +19,19 @@ enum Main {
                 exit(0)
             }
             dispatchMain()
+        }
+        if CommandLine.arguments.contains(ToolRelay.flag) {
+            do {
+                let kit = try ToolRelay.Client()
+                Task {
+                    await MCPServer.run(kit)
+                    exit(0)
+                }
+                dispatchMain()
+            } catch {
+                FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
+                exit(1)
+            }
         }
         if let flag = CommandLine.arguments.firstIndex(of: "--local-prompt"), flag + 1 < CommandLine.arguments.count {
             // For fine-tuning scripts: print the exact system prompt a local model gets for this question (Notion tools).
@@ -42,11 +56,11 @@ private struct NoCalendar: CalendarSource {
 }
 
 /// The local tool-loop system prompt for a question, built by the same code the app uses to pick tools
-/// (Notion with a stand-in token, timers, calendar); nothing is ever called.
+/// (Notion with a stand-in token, timers, calendar, Mac tools); nothing is ever called.
 @MainActor
 private func localPrompt(for question: String) -> String {
     let kit = NotionTools(token: "x")
-    let toolbox = Toolbox(timers: TimerCenter(state: AppState()), calendar: NoCalendar(), notion: { kit })
+    let toolbox = Toolbox(timers: TimerCenter(state: AppState()), calendar: NoCalendar(), mac: MacControls(), notion: { kit })
     let needs = toolbox.needs(question)
     let kits = (try? toolbox.localKits(for: question, needs: needs)) ?? []
     return LocalToolLoop.systemPrompt(kits: kits, hint: toolbox.localHint(for: question, kits: kits, needs: needs))

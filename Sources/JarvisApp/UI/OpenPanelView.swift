@@ -30,6 +30,13 @@ struct OpenPanelView: View {
                 // its content away and back), Keep on the Finder tab, and the next timer while a caption is up.
                 PanelTabs(selected: state.layout.hidesContent ? nil : state.dock.tab, tint: tint,
                           accent: state.skin.accent, select: dock.select)
+                // Between the tabs and the notch while Quick Dock is on; nothing while it's off.
+                if state.settings.quickDock {
+                    Label("Quick Dock", systemImage: "rectangle.on.rectangle")
+                        .modifier(TabSegment(on: true, tint: tint, accent: state.skin.accent))
+                        .help("Quick Dock is on: one window at a time, the rest wait on the sides")
+                        .transition(.opacity)
+                }
                 if state.captionActive, let timer = state.timers.first {
                     Label { TimerCountdown(timer: timer) } icon: { Image(systemName: "timer") }
                         .font(.callout.weight(.semibold))
@@ -42,7 +49,7 @@ struct OpenPanelView: View {
             .overlay(alignment: .leading) {
                 // Video, pinned just right of the notch where the mini notch's tab had it (the dropdown is wide
                 // enough that Keep | Large never reaches it).
-                // Keep Display right beside it, so the controls sit together.
+                // Keep Display right beside it, so the controls sit together, then the Last response tab.
                 HStack(spacing: 6) {
                     if state.video.available || state.video.held {
                         VideoButton(held: state.video.held, tint: tint, accent: state.skin.accent,
@@ -53,12 +60,8 @@ struct OpenPanelView: View {
                     // Always there, so Keep can be turned off from any tab it was turned on in.
                     KeepButton(mode: state.dock.keep, tint: tint,
                                accent: state.skin.accent, select: { dock.setKeep($0); video.sync() })
-                }
-                .offset(x: videoButtonX)
-            }
-            .overlay(alignment: .trailing) {
-                // Right edge: the "Last response" tab for a minute after an answer, then Settings.
-                HStack {
+                    // The "Last response" tab for a minute after an answer, in this row so it never lands on Keep
+                    // (on the right edge it slid under Keep Info).
                     TimelineView(.periodic(from: .now, by: 5)) { context in
                         if state.lastResponse(now: context.date) != nil {
                             Button(action: state.showLastResponse) {
@@ -73,14 +76,17 @@ struct OpenPanelView: View {
                             .transition(.opacity)
                         }
                     }
-                    Button(action: openSettings) {
-                        Image(systemName: "gearshape.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(0.6)
-                    .help("Settings")
-                    .padding(.leading, 6)
                 }
+                .offset(x: videoButtonX)
+            }
+            .overlay(alignment: .trailing) {
+                // Right edge: Settings.
+                Button(action: openSettings) {
+                    Image(systemName: "gearshape.fill")
+                }
+                .buttonStyle(.plain)
+                .opacity(0.6)
+                .help("Settings")
             }
             .offset(y: 6)
             .font(.callout)
@@ -199,7 +205,9 @@ struct OpenPanelView: View {
             } else if state.captionActive, let turn = state.turns.last {
                 CaptionView(turn: turn, skin: state.skin, size: state.settings.captionSize,
                             showTokens: state.settings.showTokens, speaking: state.voice == .speaking,
-                            pinned: state.captionPinned, togglePin: state.toggleCaptionPin,
+                            pinned: state.captionPinned, showsSummary: state.showsSummary,
+                            togglePin: state.toggleCaptionPin,
+                            summarize: { turn.summary == nil ? assistant.summarize() : state.toggleSummary() },
                             useCloud: assistant.useCloud, skipCloud: assistant.skipCloud,
                             stopSpeaking: voice.stopSpeaking)
                     .frame(height: state.layout.captionHeight - 10)
@@ -217,6 +225,7 @@ struct OpenPanelView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: state.captionActive)
         .animation(.spring(duration: 0.4, bounce: 0.1), value: state.captionPinned)
+        .animation(.spring(duration: 0.4, bounce: 0.1), value: state.showsSummary)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: state.dock.showsShelf)
         .animation(.easeInOut(duration: 0.25), value: state.dock.tab)
         .animation(.easeInOut(duration: 0.2), value: state.dock.dragging)

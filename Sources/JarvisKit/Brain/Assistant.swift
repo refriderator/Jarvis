@@ -42,6 +42,13 @@ public final class Assistant {
         let needs: Toolbox.CloudNeeds
     }
     private var waiting: WaitingForCloud?
+    /// An app Jarvis offered to open for a change it can't make, until the person answers (or the follow-up window ends).
+    private var offered: (app: String, at: Date)?
+
+    private static let yes = try! NSRegularExpression(
+        pattern: #"^\W*(yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|open it)\b"#, options: .caseInsensitive)
+    private static let no = try! NSRegularExpression(
+        pattern: #"^\W*(no|nope|nah|don'?t|never ?mind|cancel|skip)\b"#, options: .caseInsensitive)
 
     public func ask(_ text: String, spoken: Bool = false) {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -71,9 +78,27 @@ public final class Assistant {
     private func answer(_ asked: String, after earlier: [ChatMessage]) async {
         // "Hey Jarvis, ..." (or whatever it's called): the name isn't part of the question.
         let text = AssistantName.dropAddress(asked, name: state.settings.assistantName)
+        if let offer = offered {
+            offered = nil
+            let range = NSRange(text.startIndex..., in: text)
+            if Date.now.timeIntervalSince(offer.at) < Self.followUpWindow {
+                if Self.yes.firstMatch(in: text, range: range) != nil {
+                    finish(tools.openApp(offer.app).map { "Opening \($0)." } ?? "I couldn't open \(offer.app).", source: "Apps", tokens: 0)
+                    return
+                }
+                if Self.no.firstMatch(in: text, range: range) != nil {
+                    finish("Okay.", source: "Apps", tokens: 0)
+                    return
+                }
+            }
+        }
+        if let ask = MorningBrief.ask(text), let brief = await brief(ask) {
+            finish(brief, source: ask == .morning ? "Morning" : "Weather", tokens: 0)
+            return
+        }
         var local = makeLocal(state.settings)
-        let localDoesTools = state.settings.localFirst && local?.canUseTools == true
-        if let instant = tools.instantReply(text, calendar: !localDoesTools) {
+        // Calendar adds are plain code: the local brain can only read, and the cloud brain can't reach the calendar.
+        if let instant = tools.instantReply(text) {
             finish(instant.text, source: instant.source, tokens: 0)
             return
         }
@@ -98,8 +123,17 @@ public final class Assistant {
                 note = " · local failed"
             }
         }
-        if let hint = tools.cloudCantDo(text) {
+        // With Claude's access on, the cloud brain has the timers and calendar itself.
+        let access = state.settings.claudeAccess
+        if access == .none, let hint = tools.cloudCantDo(text) {
             fail(hint)
+            return
+        }
+        // The local brain is on but can't make this change: say so and offer the app, instead of guessing or
+        // sending it to a cloud brain that can't reach the calendar.
+        if local != nil, !decision.namedClaude, access == .none, let app = tools.openOffer(for: text) {
+            offered = (app, .now)
+            finish(Toolbox.offerText(app: app), source: "Apps", tokens: 0)
             return
         }
         guard let cloud = makeCloud(state.settings) else {
@@ -118,6 +152,17 @@ public final class Assistant {
         await askCloud(cloud, history: earlier + [question], note: note, needs: needs)
     }
 
+    /// The morning brief, or just the weather. Nil when there's no weather to give, so a brain answers instead.
+    private func brief(_ ask: MorningBrief.Ask, now: Date = .now) async -> String? {
+        guard let source = tools.weather else { return nil }
+        let city = state.settings.weatherCity.trimmingCharacters(in: .whitespaces)
+        let report = try? await source.current(city: city.isEmpty ? nil : city)
+        if ask == .weather { return report.map(MorningBrief.weather) }
+        let day = Calendar.current.dateInterval(of: .day, for: now)
+        let events = day.flatMap { tools.calendar?.events(from: $0.start, to: $0.end) }
+        return MorningBrief.text(now: now, weather: report, events: events ?? [], due: state.due, calendarOn: events != nil)
+    }
+
     /// Plain reply, or the tool loop when the request needs tools and the model can use them.
     private func askLocal(_ local: ChatProvider, text: String, history: [ChatMessage],
                           needs: Toolbox.CloudNeeds) async throws -> ChatReply {
@@ -129,16 +174,31 @@ public final class Assistant {
     private func askCloud(_ cloud: ChatProvider, history: [ChatMessage], note: String, needs: Toolbox.CloudNeeds) async {
         do {
             // The photo is taken only now, after any token-saving check said yes.
-            let extras = try await tools.extras(for: needs)
+            var extras = try await tools.extras(for: needs, access: state.settings.claudeAccess)
+            // Only Claude can use them; other cloud brains get the question alone.
+            if !cloud.supportsExtras { extras = .none }
             let reply = try await cloud.reply(system: Persona.cloud(name: AssistantName.display(state.settings.assistantName)), history: history, extras: extras)
-            finish(reply.text, source: cloud.label + note, tokens: reply.totalTokens)
+            finish(reply.text, source: cloud.label + note, tokens: reply.totalTokens, cloud: true)
         } catch {
             fail(error.localizedDescription)
         }
     }
 
-    private func finish(_ text: String, source: String, tokens: Int) {
-        state.finishTurn(text, source: source, tokens: tokens)
+    /// The caption's Summarize button: the cloud brain turns the last answer into points (see `Summary`).
+    /// Clicked on purpose, so token saving doesn't ask first.
+    public func summarize() {
+        guard let turn = state.turns.last, turn.cloud, let answer = turn.answer, turn.summary == nil,
+              !turn.summarizing, let cloud = makeCloud(state.settings) else { return }
+        state.beginSummary()
+        let text = turn.question.isEmpty ? answer : "Question: \(turn.question)\n\nAnswer: \(answer)"
+        Task {
+            let reply = try? await cloud.reply(system: Summary.prompt, history: [ChatMessage(.user, text)])
+            state.finishSummary(reply.flatMap { Summary.parse($0.text) }, tokens: reply?.totalTokens ?? 0)
+        }
+    }
+
+    private func finish(_ text: String, source: String, tokens: Int, cloud: Bool = false) {
+        state.finishTurn(text, source: source, tokens: tokens, cloud: cloud)
         log?.finish(answer: text, source: source)
     }
 

@@ -32,8 +32,9 @@ struct DockTab: View {
                     ForEach(state.dock.shownApps) { app in
                         let icon = NSRunningApplication(processIdentifier: app.pid)?.icon ?? NSImage()
                         TabIcon(image: icon, number: state.dock.number(of: app), accent: state.skin.accent)
-                            .help("\(app.appName): click to open it full screen, or drag it out")
+                            .help("\(app.appName): click to open it full desktop, drag it out to hold it, right-click to let go of it")
                             .onTapGesture { dock.restore(app) }
+                            .contextMenu { Button("Let Go") { dock.letGo(app) } }
                             .gesture(DragGesture(minimumDistance: 3).onChanged { _ in dock.pullOut(app, icon: icon) })
                             .transition(.scale(scale: 0.3).combined(with: .opacity))
                     }
@@ -46,10 +47,8 @@ struct DockTab: View {
                 // Tucked: the tab has grown down over the video and wears the video icon, centred across it and in
                 // the part below the notch. It rides the bounce where the stretch takes its spot, unstretched.
                 if layout.tuckedVideo != nil, stage == .idle, video.morph == nil {
-                    let y = (layout.notch.height + layout.tabFrame.height) / 2
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(state.skin.accent)
+                    let y = (layout.notch.height + layout.tabFrame.height) / 2 - TuckedVideoIcon.lift
+                    TuckedVideoIcon(skin: state.skin)
                         .position(x: layout.tabFrame.width / 2, y: y)
                         .offset(y: drop * y / max(layout.tabFrame.height, 1))
                         .help("Bring the video back")
@@ -379,8 +378,9 @@ struct HeldAppsRow: View {
                         if let number = state.dock.number(of: app) { NumberBadge(number: number, accent: state.skin.accent, size: 14) }
                     }
                     .contentShape(Rectangle())
-                    .help("\(app.appName): click to open it full screen, Option-click to swap it with the window in front, or drag it out")
+                    .help("\(app.appName): click to open it full desktop, Option-click to swap it with the window in front, drag it out to hold it, right-click to let go of it")
                     .onTapGesture { dock.restore(app) }
+                    .contextMenu { Button("Let Go") { dock.letGo(app) } }
                     .gesture(DragGesture(minimumDistance: 3).onChanged { _ in dock.pullOut(app, icon: icon) })
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }

@@ -38,3 +38,24 @@ extension ToolKit {
     public var mcpFlag: String? { nil }
     public var environment: [String: String] { [:] }
 }
+
+/// A kit with only the tools that read: what the local brain gets, so anything that adds, changes or deletes goes to
+/// the cloud brain. Timers stay (they're on this Mac only, and the cloud brain can't set them).
+public struct ReadOnlyKit: ToolKit {
+    let base: ToolKit
+    let allowed: Set<String>
+
+    public init(_ base: ToolKit, allowed: Set<String>) {
+        self.base = base
+        self.allowed = allowed
+    }
+
+    public var name: String { base.name }
+    public var instructions: String { base.instructions }
+    public var definitions: [ToolDefinition] { base.definitions.filter { allowed.contains($0.name) } }
+
+    public func call(_ name: String, arguments: Data) async throws -> String {
+        guard allowed.contains(name) else { throw ChatError("\(base.name)_\(name) isn't available here: only reading is.") }
+        return try await base.call(name, arguments: arguments)
+    }
+}

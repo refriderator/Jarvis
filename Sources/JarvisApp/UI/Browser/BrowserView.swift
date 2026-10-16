@@ -11,6 +11,8 @@ struct BrowserView: View {
     @State private var address = ""
     @FocusState private var typing: Bool
     @State private var draggingTab: BrowserTab.ID?
+    /// The pointer is on the address field: the open-in-your-browser arrow shows at its left end.
+    @State private var onAddress = false
 
     var body: some View {
         let tint = state.skin.foreground
@@ -69,14 +71,32 @@ struct BrowserView: View {
             .scrollIndicators(.never)
             .endsReorder(dragging: $draggingTab)
             icon("plus", help: "New tab", tint: tint, action: browser.newTab)
-            TextField("Search or address", text: $address)
-                .textFieldStyle(.plain)
-                .font(.caption)
-                .focused($typing)
-                .onSubmit { browser.go(typed: address); typing = false }
-                .padding(.horizontal, 8)
-                .frame(width: 170, height: 22)
-                .background(tint.opacity(0.08), in: Capsule())
+            HStack(spacing: 2) {
+                // Hovered, a page showing: open it in the default browser (Safari, Chrome...).
+                if onAddress, !typing, let url = browser.current?.view.url ?? browser.tabs.current.url {
+                    Button { NSWorkspace.shared.open(url) } label: {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 16, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(tint.opacity(0.8))
+                    .help("Open in your browser")
+                    .transition(.opacity)
+                }
+                TextField("Search or address", text: $address)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .focused($typing)
+                    .onSubmit { browser.go(typed: address); typing = false }
+            }
+            .padding(.leading, onAddress && !typing && browser.tabs.current.url != nil ? 4 : 8)
+            .padding(.trailing, 8)
+            .frame(width: 170, height: 22)
+            .background(tint.opacity(0.08), in: Capsule())
+            .onHover { onAddress = $0 }
+            .animation(.easeInOut(duration: 0.15), value: onAddress)
             icon(state.dock.browserLarge ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
                  help: state.dock.browserLarge ? "Smaller" : "Larger", tint: tint, action: browser.toggleLarge)
         }

@@ -10,7 +10,10 @@ struct CaptionView: View {
     let showTokens: Bool
     let speaking: Bool
     let pinned: Bool
+    let showsSummary: Bool
     let togglePin: () -> Void
+    /// Asks for the summary, or switches between it and the answer once there is one.
+    let summarize: () -> Void
     let useCloud: () -> Void
     let skipCloud: () -> Void
     let stopSpeaking: () -> Void
@@ -27,6 +30,8 @@ struct CaptionView: View {
                 Group {
                     if turn.awaitingCloud {
                         askBeforeCloud
+                    } else if showsSummary, let summary = turn.summary {
+                        SummaryView(summary: summary, skin: skin, font: font)
                     } else if let answer = turn.answer {
                         Text(answer)
                             .foregroundStyle(turn.failed ? Color.orange : skin.foreground)
@@ -53,6 +58,9 @@ struct CaptionView: View {
                         .opacity(0.45)
                 }
                 Spacer()
+                if turn.cloud, turn.answer != nil, !turn.failed {
+                    summaryButton
+                }
                 if speaking {
                     // The stop key is only taken while Jarvis talks.
                     Button(action: stopSpeaking) {
@@ -69,6 +77,29 @@ struct CaptionView: View {
         .padding(.horizontal, 6)
         .contentShape(Rectangle())
         .onTapGesture(perform: togglePin)
+    }
+
+    /// Summarize, then a switch back to the full answer (and to the summary again).
+    private var summaryButton: some View {
+        Button(action: summarize) {
+            HStack(spacing: 4) {
+                if turn.summarizing {
+                    ProgressView().controlSize(.mini)
+                    Text("Summarizing…")
+                } else if turn.summary == nil {
+                    Image(systemName: "list.bullet.rectangle")
+                    Text("Summarize")
+                } else {
+                    Text(showsSummary ? "Full answer" : "Summary")
+                }
+            }
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(skin.foreground.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(turn.summarizing)
     }
 
     /// Token saving: the question needs the cloud brain, so ask first.

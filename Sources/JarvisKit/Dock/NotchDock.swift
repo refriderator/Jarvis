@@ -10,12 +10,16 @@ public struct HeldApp: Sendable, Equatable, Identifiable {
     public var appName: String
     /// The desktop (Space) it was set aside on; nil if that couldn't be told (then it shows everywhere).
     public var desktop: Int?
+    /// Waiting off a side of the screen (`SideDock`) rather than minimized: shown here too, so the notch says
+    /// what it holds, and clicked it does what its card does.
+    public var onSide: Bool
 
-    public init(id: UUID = UUID(), pid: Int32, appName: String, desktop: Int? = nil) {
+    public init(id: UUID = UUID(), pid: Int32, appName: String, desktop: Int? = nil, onSide: Bool = false) {
         self.id = id
         self.pid = pid
         self.appName = appName
         self.desktop = desktop
+        self.onSide = onSide
     }
 }
 

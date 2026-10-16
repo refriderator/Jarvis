@@ -19,10 +19,19 @@ public struct WeatherReport: Equatable, Sendable {
     public var place: String?
     /// Apparent temperature, when the source gives it.
     public var feelsLike: Double?
+    /// Wind now, km/h (mph with Fahrenheit), when the source gives it.
+    public var wind: Double?
+    /// Today's high, and the highest chance of rain or snow today (0-100), when the source gives them.
+    public var high: Double?
+    public var precipitationChance: Int?
 
     public init(temperature: Double, unit: TemperatureUnit, code: Int, isDay: Bool,
-                place: String? = nil, feelsLike: Double? = nil) {
+                place: String? = nil, feelsLike: Double? = nil, wind: Double? = nil, high: Double? = nil,
+                precipitationChance: Int? = nil) {
         self.feelsLike = feelsLike
+        self.wind = wind
+        self.high = high
+        self.precipitationChance = precipitationChance
         self.temperature = temperature
         self.unit = unit
         self.code = code

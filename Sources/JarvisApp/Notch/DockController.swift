@@ -29,8 +29,10 @@ final class DockController {
     /// Where the drop box is, in screen coordinates (nil while it isn't on screen).
     @ObservationIgnored private var box: CGRect?
 
-    @ObservationIgnored private let state: AppState
-    @ObservationIgnored private let windows: WindowControlling
+    @ObservationIgnored let state: AppState
+    @ObservationIgnored let windows: WindowControlling
+    /// Windows held on the sides of the screen (minimized into the strip only when no side is free).
+    @ObservationIgnored let sides: SideDockController
     /// The real windows behind `state.dock.apps`.
     @ObservationIgnored private var minimized: [UUID: ForeignWindow] = [:]
     /// The window under the pointer when the button went down, and where it was then.
@@ -61,6 +63,7 @@ final class DockController {
     init(state: AppState, windows: WindowControlling = AXWindowControl()) {
         self.state = state
         self.windows = windows
+        sides = SideDockController(state: state, windows: windows)
         shown = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
         // Each desktop has its own strip: follow the desktop showing, and drop windows brought back some
@@ -77,11 +80,29 @@ final class DockController {
         pruner = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.prune() }
         }
+        sides.onPick = { [weak self] window in self?.restoreSide(window) }
+        sides.onChange = { [weak self] parked in self?.showSides(parked) }
+        sides.minimizedOn = { [weak self] desktop in
+            self?.state.dock.apps(on: desktop).filter { !$0.onSide }.count ?? 0
+        }
+    }
+
+    /// The windows held on the sides also show in the notch's strip (after the minimized ones), so it says what
+    /// Jarvis is holding with Quick Dock on or off.
+    private func showSides(_ parked: [ParkedWindow]) {
+        let side = parked.map { item in
+            HeldApp(id: item.id, pid: item.window.pid,
+                    appName: NSRunningApplication(processIdentifier: item.window.pid)?.localizedName ?? "App",
+                    desktop: item.desktop, onSide: true)
+        }
+        state.updateDock { dock in dock.apps = dock.apps.filter { !$0.onSide } + side }
     }
 
     /// Forgets held windows that aren't minimized any more (brought back another way) or were closed.
     private func prune() {
         let gone = state.dock.apps.filter { app in
+            // The sides keep their own list (`SideDockController` prunes it).
+            guard !app.onSide else { return false }
             guard let window = minimized[app.id] else { return true }
             // Minimizing takes a moment to show (macOS still says "not minimized" for about 0.3 s), so a window
             // set aside just now is left alone; pruning it then dropped the app straight after holding it.
@@ -162,13 +183,32 @@ final class DockController {
     private func finishDrag() {
         let window = movingWindow && catcher.caught ? pressed?.window : nil
         let opened = opener.caught
+        let edge = movingWindow && !catcher.caught ? pressed?.window : nil
         stopTracking()
+        if let edge { dropAtEdge(edge) }
         state.updateDock { $0.dragging = nil; $0.catching = false }
         if let window {
             kind(of: window) == .folder ? holdFolder(window) : holdApp(window)
         } else if opened, !state.layout.hotZone(for: .open).contains(NSEvent.mouseLocation), !state.notch.locked {
             // Opened by the drag but let go elsewhere: nothing to show.
             state.send(.dismiss)
+        }
+    }
+
+    /// Let go at the left or right edge of a display: the window goes to that side. A moment first, so macOS's own
+    /// tiling (for windows dragged to an edge) is done with it.
+    private func dropAtEdge(_ window: ForeignWindow) {
+        let pointer = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }),
+              let side = SideDock.dropSide(pointer, screen: screen.frame, visible: screen.visibleFrame,
+                                           free: SideDock.freeSides(of: screen.frame, others: NSScreen.screens.map(\.frame)))
+        else { return }
+        log.debug("drop: at the \(side.rawValue, privacy: .public) edge")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else { return }
+            // A held window being used from the side can be moved to the other side too.
+            sides.unpark(window)
+            sides.park(window, makeRoom: true, side: side)
         }
     }
 
@@ -198,8 +238,11 @@ final class DockController {
     }
 
     /// Minimized, its icon in the tab. The dropdown stays until the pointer leaves it; the tab comes out after.
+    /// Holding on the sides, it's slid off the nearer edge instead (minimized only when it can't be).
     func holdApp(_ window: ForeignWindow) {
+        if sides.park(window, makeRoom: false) { return }
         let desktop = Desktops.of(window.element).first ?? Desktops.active(on: NSScreen.menuBarScreen?.displayID)
+        // Held on the sides counts too: 6 per desktop in all.
         guard state.dock.apps(on: desktop).count < NotchDock.maxApps else { return NSSound.beep() }
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "App"
         let app = HeldApp(pid: window.pid, appName: name, desktop: desktop)
@@ -233,7 +276,19 @@ final class DockController {
     /// Clicked: it leaves the strip and fills the desktop in front, the windows already here left where they are.
     /// Option-click swaps it with the app in front instead, like Stage Manager, setting that one aside in its place.
     /// With Quick Dock on, every click swaps: one window at a time, so the one in front goes to the strip.
+    /// One held on a side is let go of and fills the desktop (with Quick Dock, swapping with the window in front);
+    /// its card on the edge is what pops it out to use from the side.
     func restore(_ app: HeldApp) {
+        if app.onSide {
+            state.send(.dismiss)
+            guard let window = sides.window(app.id) else { return }
+            if state.settings.quickDock { return restoreSide(window) }
+            sides.unpark(window)
+            ignoreActivationUntil = Date().addingTimeInterval(0.8)
+            fill(window)
+            windows.raise(window, activate: true)
+            return
+        }
         let swap = state.settings.quickDock || NSEvent.modifierFlags.contains(.option)
         let front = swap ? frontWindowToSetAside(other: app.pid) : nil
         guard let window = take(app) else { return }
@@ -250,6 +305,17 @@ final class DockController {
             windows.raise(window, activate: true)
             watchForDesktopJump()
         }
+    }
+
+    /// Quick Dock: a card clicked on the side swaps with the window in front, filling the desktop while that one
+    /// goes to the side.
+    func restoreSide(_ window: ForeignWindow) {
+        let front = frontWindowToSetAside(other: window.pid)
+        guard sides.unpark(window) != nil else { return }
+        ignoreActivationUntil = Date().addingTimeInterval(0.8)
+        fill(window)
+        windows.raise(window, activate: true)
+        if let front { holdApp(front) }
     }
 
     // MARK: Quick Dock
@@ -272,14 +338,18 @@ final class DockController {
 
     /// Fills its screen's desktop (minus menu bar and Dock).
     func fill(_ window: ForeignWindow) {
+        sides.unpark(window)
         fit(window, fill: true)
     }
 
     /// Quick Dock setting a window aside: like `holdApp`, but a full strip makes room. It holds 6 per desktop;
     /// past that the oldest stays minimized in the Dock and leaves the strip.
     func setAside(_ window: ForeignWindow) {
+        if sides.isParked(window) || sides.park(window, makeRoom: true) { return }
         let desktop = Desktops.of(window.element).first
-        if state.dock.apps(on: desktop).count >= NotchDock.maxApps, let oldest = state.dock.apps(on: desktop).first {
+        // Full (sides and strip together): the oldest in the strip makes room.
+        let held = state.dock.apps(on: desktop)
+        if held.count >= NotchDock.maxApps, let oldest = held.first(where: { !$0.onSide }) {
             minimized[oldest.id] = nil
             heldAt[oldest.id] = nil
             state.updateDock { dock in dock.apps.removeAll { $0.id == oldest.id } }
@@ -322,6 +392,7 @@ final class DockController {
     /// had been picked up by its title bar. (An earlier version hid the app around the restore to skip the Dock's
     /// animation; showing the app again sent the window back to the desktop it came from.)
     func pullOut(_ app: HeldApp, icon: NSImage) {
+        if app.onSide { return pullOutSide(app, icon: icon) }
         guard follower == nil, let window = take(app), let size = windows.frame(of: window)?.size else { return }
         let start = NSEvent.mouseLocation
         // From the dropdown, it closes out of the way; from the tab, the notch is closed already.
@@ -345,6 +416,24 @@ final class DockController {
         }
     }
 
+    /// One held on a side, dragged out: let go of, and straight into the pointer like a minimized one (it's
+    /// already a window on screen, so there's no wait for it to come back).
+    private func pullOutSide(_ app: HeldApp, icon: NSImage) {
+        guard follower == nil, let window = sides.window(app.id), let size = windows.frame(of: window)?.size else { return }
+        sides.unpark(window)
+        let start = NSEvent.mouseLocation
+        state.send(.dismiss)
+        ghost.lift(icon, at: start)
+        let frame = Self.hanging(size, from: start)
+        windows.setFrame(frame, of: window)
+        windows.raise(window, activate: false)
+        ghost.become(frame)
+        pulled = (window, size)
+        follower = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.follow() }
+        }
+    }
+
     private func follow() {
         guard let pulled else { return }
         guard NSEvent.pressedMouseButtons & 1 != 0 else {
@@ -357,6 +446,18 @@ final class DockController {
             return
         }
         windows.setFrame(Self.hanging(pulled.size, from: NSEvent.mouseLocation), of: pulled.window)
+    }
+
+    /// "Let Go" on an icon: Jarvis stops holding it and the window comes back as it was (a side's to where it
+    /// was before; a minimized one un-minimized, on screen), without filling the desktop.
+    func letGo(_ app: HeldApp) {
+        if app.onSide { return sides.letGo(app.id) }
+        guard let window = take(app) else { return }
+        windows.setMinimized(false, window)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.fit(window)
+            self?.windows.raise(window, activate: true)
+        }
     }
 
     /// Lets go of a held app; nil when its window was closed meanwhile (its app is brought forward instead).

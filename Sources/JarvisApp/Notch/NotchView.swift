@@ -408,10 +408,9 @@ private struct TuckCover: View {
             }
             if morph.icon, tucked != nil {
                 // Where the tab shows it: across the middle, in the part below the notch.
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(skin.accent)
-                    .position(x: (f.width - morph.rightShoulder) / 2, y: (notchHeight + f.height) / 2)
+                TuckedVideoIcon(skin: skin)
+                    .position(x: (f.width - morph.rightShoulder) / 2,
+                              y: (notchHeight + f.height) / 2 - TuckedVideoIcon.lift)
                     .transition(.opacity)
             }
         }

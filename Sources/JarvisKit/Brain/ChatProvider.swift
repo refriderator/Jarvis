@@ -44,14 +44,20 @@ public struct ChatExtras: Sendable {
     /// A JPEG to look at alongside the last message.
     public var image: Data?
     public var tools: ToolKit?
+    /// This Mac's tools (apps, windows, timers, calendar; `CombinedKit`), when Claude's access allows them.
+    public var mac: ToolKit?
+    /// Claude Code may run commands and read and edit files (Claude's access: Full).
+    public var computer = false
 
-    public init(image: Data? = nil, tools: ToolKit? = nil) {
+    public init(image: Data? = nil, tools: ToolKit? = nil, mac: ToolKit? = nil, computer: Bool = false) {
         self.image = image
         self.tools = tools
+        self.mac = mac
+        self.computer = computer
     }
 
     public static let none = ChatExtras()
-    public var isEmpty: Bool { image == nil && tools == nil }
+    public var isEmpty: Bool { image == nil && tools == nil && mac == nil && !computer }
 }
 
 /// Something that answers: a cloud model, Claude Code, or a model on this Mac.

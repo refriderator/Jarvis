@@ -13,7 +13,7 @@ struct GeneralTab: View {
                 Toggle("Launch at login", isOn: state.binding(\.launchAtLogin))
                 Toggle("Show in menu bar", isOn: state.binding(\.showInMenuBar))
                 Toggle("Quick Dock", isOn: state.binding(\.quickDock))
-                    .help("One window at a time: the app you switch to fills the desktop, and the rest wait in the notch")
+                    .help("One window at a time: the app you switch to fills the desktop, and the rest wait on the sides")
                 Picker("Open the notch on", selection: state.binding(\.openTrigger)) {
                     Text("Click (hover peeks)").tag(OpenTrigger.click)
                     Text("Hover").tag(OpenTrigger.hover)
@@ -39,10 +39,13 @@ struct GeneralTab: View {
                 if state.settings.holdWindows && !AccessibilityAccess.isTrusted {
                     Button("Allow Accessibility…", action: AccessibilityAccess.request)
                 }
+                if !CGPreflightScreenCaptureAccess() {
+                    Button("Allow Screen Recording for live previews…") { _ = CGRequestScreenCaptureAccess() }
+                }
             } header: {
                 Text("Windows")
             } footer: {
-                Text("Drag a window by its title bar onto the notch to hold it. Needs Accessibility.")
+                Text("Drag a window by its title bar onto the notch to hold it. It waits just off the nearer side of the screen (drag a window to the left or right edge to put it there); point at that edge to see it, and click it to use it from the side. Needs Accessibility.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -4,6 +4,7 @@ import Foundation
 /// Runs it stripped down: web search as its only tool, no MCP servers, skills or settings,
 /// in an empty folder, which keeps a question near a thousand tokens instead of the full agent context.
 /// Notion questions add only Jarvis's own Notion MCP server; camera questions add the Read tool for the photo.
+/// Claude's access (Settings) adds Jarvis's Mac tools (Tools), and Claude Code's own commands and file tools (Full).
 @MainActor
 public struct ClaudeCodeProvider: ChatProvider {
     public let executable: URL
@@ -46,7 +47,7 @@ public struct ClaudeCodeProvider: ChatProvider {
 
         var tools = ["WebSearch"], allowed = ["WebSearch"]
         var environment = Self.environment
-        var mcp = #"{"mcpServers":{}}"#
+        var servers: [String: Any] = [:]
         var prompt = history.flattened
         var fullSystem = system
         if let image = extras.image {
@@ -60,12 +61,29 @@ public struct ClaudeCodeProvider: ChatProvider {
             // Secrets ride in Claude Code's environment and the config only names them ("${VAR}"),
             // so the token never shows up on a command line, in a file or in a log.
             let names = Dictionary(uniqueKeysWithValues: kit.environment.keys.map { ($0, "${\($0)}") })
-            let config = ["mcpServers": [kit.name: ["command": jarvis.path, "args": [flag], "env": names]]]
+            servers[kit.name] = ["command": jarvis.path, "args": [flag], "env": names]
             environment.merge(kit.environment) { _, secret in secret }
-            mcp = String(decoding: try JSONSerialization.data(withJSONObject: config), as: UTF8.self)
             allowed.append("mcp__\(kit.name)")
             fullSystem += "\n\n" + kit.instructions
         }
+        // The Mac tools run in the app; `Jarvis --tools-mcp` passes Claude Code's calls on to it (`ToolRelay`).
+        if let kit = extras.mac, let flag = kit.mcpFlag, let jarvis = jarvisExecutable {
+            servers[kit.name] = ["command": jarvis.path, "args": [flag]]
+            allowed.append("mcp__\(kit.name)")
+            fullSystem += "\n\n" + kit.instructions
+        }
+        var directories: [String] = []
+        if extras.computer {
+            // Allowed up front: `claude -p` can't stop to ask.
+            let own = ["Bash", "Read", "Edit", "Write", "Glob", "Grep"]
+            tools += own.filter { !tools.contains($0) }
+            allowed += own.filter { !allowed.contains($0) }
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            directories = ["--add-dir", home]
+            environment["PATH"] = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:" + (environment["PATH"] ?? "")
+            fullSystem += "\n\n" + Self.computerNote
+        }
+        let mcp = String(decoding: try JSONSerialization.data(withJSONObject: ["mcpServers": servers]), as: UTF8.self)
         let output = try await ProcessRunner.run(
             executable,
             arguments: ["-p", "--output-format", "json", "--model", model, "--effort", "low",
@@ -74,12 +92,19 @@ public struct ClaudeCodeProvider: ChatProvider {
                         "--no-session-persistence",
                         "--strict-mcp-config", "--mcp-config", mcp,
                         "--disable-slash-commands", "--exclude-dynamic-system-prompt-sections",
-                        "--setting-sources", ""],
+                        "--setting-sources", ""] + directories,
             environment: environment, directory: folder, input: prompt,
-            timeout: extras.isEmpty ? 120 : 240)
+            timeout: extras.computer ? 300 : extras.isEmpty ? 120 : 240)
         try? FileManager.default.removeItem(at: photo)
         return try Self.parse(output.stdout)
     }
+
+    /// Said whenever Claude may run commands and edit files: nothing asks first, so it has to be careful itself.
+    static let computerNote = """
+        You can run shell commands and read and edit files on the user's Mac (their home folder is allowed). Do only \
+        what was asked. Never delete, overwrite, move, send or install anything unless the user clearly asked for \
+        exactly that; if a request is unclear, say what you would do instead of doing it. Say briefly what you did.
+        """
 
     nonisolated public static func parse(_ data: Data) throws -> ChatReply {
         struct Result: Decodable {

@@ -138,6 +138,13 @@ struct TodayListTests {
         #expect(rows.last?.when == "All day")
     }
 
+    @Test func overdueItemsAreGreyWithTheirDay() {
+        let late = DueItem(id: "c", title: "Lab", due: now.addingTimeInterval(-2 * 86_400), hasTime: false, source: "S")
+        let rows = TodayList.rows(agenda: [], due: [late], now: now)
+        #expect(rows.first?.isPast == true)
+        #expect(rows.first?.when == late.due.formatted(.dateTime.month(.abbreviated).day()))
+    }
+
     @Test func tooManyRowsDropTheOldestPassedFirst() {
         let agenda = (0..<10).map { event("e\($0)", endsInMinutes: $0 < 4 ? -60 * (4 - $0) : 60 * ($0 - 3)) }
         let rows = TodayList.rows(agenda: agenda, due: [], now: now, max: 8)
@@ -170,5 +177,40 @@ struct OpenPlayerTests {
         state.setNowPlaying(NowPlaying(title: "A", artist: "B", isPlaying: true, player: .spotify))
         feed.openPlayer()
         #expect(player.opened == [.spotify])
+    }
+}
+
+struct MorningBriefTests {
+    @Test func knowsWhatsAsked() {
+        #expect(MorningBrief.ask("good morning") == .morning)
+        #expect(MorningBrief.ask("morning jarvis") == .morning)
+        #expect(MorningBrief.ask("what's the weather like") == .weather)
+        #expect(MorningBrief.ask("do I need an umbrella today") == .weather)
+        #expect(MorningBrief.ask("what's the weather in Paris") == nil, "somewhere else: a brain answers")
+        #expect(MorningBrief.ask("will it rain tomorrow") == nil, "a forecast: a brain answers")
+        #expect(MorningBrief.ask("good morning, can you write my essay intro") == nil)
+    }
+
+    @Test func saysWhatToWearNotTheNumber() {
+        let report = WeatherReport(temperature: 9, unit: .celsius, code: 3, isDay: true, feelsLike: 7, wind: 30, high: 15,
+                                   precipitationChance: 70)
+        let text = MorningBrief.weather(report)
+        #expect(text == "It's cool out, so grab a jacket or a sweater. Overcast, breezy and rain is likely, so take an umbrella.")
+        #expect(!text.contains("°"))
+    }
+
+    @Test func countsTodayAndPicksTheBigThings() {
+        let now = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: .now)!
+        let at = { (hour: Int) in Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: now)! }
+        let events = [AgendaItem(id: "1", title: "PHY224 lecture", start: at(10), end: at(11), allDay: false),
+                      AgendaItem(id: "2", title: "Gym", start: at(18), end: at(19), allDay: false),
+                      AgendaItem(id: "3", title: "Breakfast", start: at(6), end: at(7), allDay: false)]
+        let due = [DueItem(id: "a", title: "Lab report", due: at(23), hasTime: true, source: "Coursework"),
+                   DueItem(id: "b", title: "Chem quiz", due: at(14), hasTime: true, source: "Exams")]
+        let text = MorningBrief.text(now: now, weather: nil, events: events, due: due, calendarOn: true)
+        #expect(text.hasPrefix("Good morning. It's "))
+        #expect(text.contains("You have 2 things on your calendar today."), "the one already over isn't counted")
+        #expect(text.contains("Don't forget Chem quiz at"), "exams first")
+        #expect(text.contains("and Lab report at"))
     }
 }

@@ -38,7 +38,7 @@ public struct NotchLayout: Sendable, Equatable {
     /// The closed notch grows this much wider on each side around the mini player.
     public static let miniGrowth: CGFloat = 17
     /// Margin between the mini player and the notch's edges (and under the hardware notch).
-    public static let videoPad: CGFloat = 5
+    public static let videoPad: CGFloat = 3
     /// The hole a video shows through: this round, inset this far inside the video.
     public static let videoHoleRadius: CGFloat = 16
     public static let videoHoleInset: CGFloat = 2
@@ -69,7 +69,8 @@ public struct NotchLayout: Sendable, Equatable {
     /// The Web tab made large: as deep as Large's video, plus its toolbar.
     public var browserLarge = false
     public static let browserLargeHeight: CGFloat = NotchLayout.theaterVideoHeight + 40
-    /// A video full screen in the Web tab: closed, the notch grows down around the page as a medium player, a
+    /// A video full screen in the Web tab, with that tab showing (not folded or switched away): closed, the notch
+    /// grows down around the page as a medium player, a
     /// little bigger than a held video's mini player (unless a video is held: that one's mini player wins).
     public var browserMini = false
     public static let mediumGrowth: CGFloat = 36
@@ -185,6 +186,17 @@ public struct NotchLayout: Sendable, Equatable {
     public static func captionHeight(forAnswerLength characters: Int) -> CGFloat {
         let lines = (characters + 54) / 55
         return min(max(defaultCaptionHeight, 60 + CGFloat(lines) * 22), maxCaptionHeight)
+    }
+
+    /// A summary pulls the panel further down than a kept answer, up to this.
+    public static let maxSummaryHeight: CGFloat = 420
+
+    /// How tall a summary's caption is: its points, the formula and the chart.
+    public static func summaryHeight(for summary: Summary) -> CGFloat {
+        let height = 60 + CGFloat(summary.points.count) * 30
+            + (summary.formula == nil ? 0 : 50)
+            + (summary.bars.isEmpty ? 0 : 110)
+        return min(max(defaultCaptionHeight, height), maxSummaryHeight)
     }
 
     /// The timer rows, then the "TODAY" heading and its rows; 0 when there are none.

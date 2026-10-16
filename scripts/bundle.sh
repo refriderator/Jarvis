@@ -10,6 +10,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$(swift build -c "$CONFIG" --show-bin-path)/Jarvis" "$APP/Contents/MacOS/Jarvis"
 cp Support/Info.plist "$APP/Contents/Info.plist"
+# The icon (redraw it with scripts/make-icon.sh).
+mkdir -p "$APP/Contents/Resources"
+cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # llama.cpp ships as a prebuilt framework; it must sit inside the app for the built-in model.
 mkdir -p "$APP/Contents/Frameworks"
 cp -R "$(find .build/artifacts -type d -path '*macos-arm64_x86_64/llama.framework' | head -1)" "$APP/Contents/Frameworks/"

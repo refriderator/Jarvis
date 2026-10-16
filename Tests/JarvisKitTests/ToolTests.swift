@@ -261,3 +261,69 @@ struct NotionDueTests {
         #expect(!connected.needs("capital of France").notion)
     }
 }
+
+@MainActor
+struct MacToolsTests {
+    @Test func checksValuesAndCallsTheApp() async throws {
+        let controls = MacControls()
+        var docked: [String?] = []
+        var quick: Bool?
+        controls.dockWindow = { app in docked.append(app); return "Put \(app ?? "Safari") in the dock." }
+        controls.setQuickDock = { on in quick = on; return on ? "Quick Dock is on." : "Quick Dock is off." }
+        let tools = MacTools(controls: controls)
+        #expect(try await tools.call("dock_window", arguments: Data(#"{}"#.utf8)) == "Put Safari in the dock.")
+        #expect(try await tools.call("dock_window", arguments: Data(#"{"app": "  "}"#.utf8)) == "Put Safari in the dock.",
+                "a blank name means the window in front")
+        #expect(docked == [nil, nil])
+        #expect(try await tools.call("quick_dock", arguments: Data(#"{"on": true}"#.utf8)) == "Quick Dock is on.")
+        #expect(quick == true)
+        await #expect(throws: ChatError.self) { try await tools.call("quick_dock", arguments: Data(#"{"on": "yes"}"#.utf8)) }
+        await #expect(throws: ChatError.self, "not wired up yet") {
+            try await tools.call("undock_window", arguments: Data(#"{"app": "Safari"}"#.utf8))
+        }
+    }
+}
+
+@MainActor
+struct ToolRelayTests {
+    private func socket() -> URL {
+        URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "jr-\(UUID().uuidString.prefix(8)).sock")
+    }
+
+    @Test func passesCallsToTheAppAndStopsWhenAccessIsOff() async throws {
+        let controls = MacControls()
+        controls.setQuickDock = { on in on ? "Quick Dock is on." : "Quick Dock is off." }
+        var allowed = true
+        let path = socket()
+        let server = ToolRelay.Server(kit: { CombinedKit([MacTools(controls: controls)]) }, allowed: { allowed }, path: path)
+        try server.start()
+        defer { server.stop() }
+        // Off the main actor, as in the real MCP process: the app's side answers on the main actor.
+        let client = try await Task.detached { try ToolRelay.Client(path: path) }.value
+        #expect(client.definitions.map(\.name).contains("mac_quick_dock"))
+        #expect(try await client.call("mac_quick_dock", arguments: Data(#"{"on": true}"#.utf8)) == "Quick Dock is on.")
+        await #expect(throws: ChatError.self, "a bad value comes back as an error") {
+            try await client.call("mac_quick_dock", arguments: Data(#"{"on": "yes"}"#.utf8))
+        }
+        allowed = false
+        await #expect(throws: ChatError.self, "access turned off in Settings") {
+            try await client.call("mac_quick_dock", arguments: Data(#"{"on": false}"#.utf8))
+        }
+        await #expect(throws: ChatError.self) { try await Task.detached { try ToolRelay.Client(path: path) }.value }
+    }
+
+    @Test func noAppRunningIsAPlainError() {
+        #expect(throws: ChatError.self) { try ToolRelay.Client(path: socket()) }
+    }
+
+    @Test func cloudGetsTheMacKitOnlyWithAccess() async throws {
+        let state = AppState()
+        let tools = Toolbox(timers: TimerCenter(state: state), calendar: FakeCalendar(), mac: MacControls())
+        let none = try await tools.extras(for: tools.needs("hello"))
+        #expect(none.isEmpty)
+        let some = try await tools.extras(for: tools.needs("hello"), access: .tools)
+        #expect(some.mac?.definitions.map(\.name).contains("calendar_add") == true, "the cloud may change the calendar")
+        #expect(!some.computer)
+        #expect(try await tools.extras(for: tools.needs("hello"), access: .full).computer)
+    }
+}

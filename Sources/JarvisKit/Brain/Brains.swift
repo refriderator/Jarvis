@@ -22,6 +22,8 @@ public enum Brains {
         switch settings.cloudBrain {
         case .claudeCode:
             return ClaudeCodeProvider.find().map { ClaudeCodeProvider(executable: $0, model: settings.claudeModel) }
+        case .codex:
+            return CodexProvider.find().map { CodexProvider(executable: $0, model: settings.codexModel) }
         case .claude:
             return secret(.claudeAPIKey).map { ClaudeAPIProvider(apiKey: $0, model: settings.claudeModel) }
         case .openAICompatible:

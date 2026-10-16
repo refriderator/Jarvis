@@ -12,13 +12,20 @@ public struct Toolbox {
     public var apps: AppLauncher?
     /// Notion tools when a token is saved, else nil.
     public var notion: () -> ToolKit?
+    /// Opening apps, the notch's window dock and Quick Dock, for the local brain.
+    public var mac: MacControls?
+    /// For the morning brief and weather questions, answered by code.
+    public var weather: WeatherSource?
 
     public init(timers: TimerCenter? = nil, calendar: CalendarSource? = nil, camera: CameraSource? = nil,
-                apps: AppLauncher? = nil, notion: @escaping () -> ToolKit? = { nil }) {
+                apps: AppLauncher? = nil, mac: MacControls? = nil, weather: WeatherSource? = nil,
+                notion: @escaping () -> ToolKit? = { nil }) {
+        self.weather = weather
         self.timers = timers
         self.calendar = calendar
         self.camera = camera
         self.apps = apps
+        self.mac = mac
         self.notion = notion
     }
 
@@ -59,19 +66,20 @@ public struct Toolbox {
     private static let scheduling = #"\b(timers?|countdown|alarm|remind(er)?s?|remind me|wake me|calendar|schedule|appointment|event)\b"#
     private static let timerRequest = #"\b(set|start|make)\b.*\b(timer|alarm)\b|\b(remind|wake) me\b"#
 
-    /// The tools a local brain gets: every tool that is set up (Notion when a token is saved, timers, calendar)
-    /// plus the calculator,
-    /// whatever the wording, so the model decides what a request needs and no word list has to.
+    /// The tools a local brain gets: the reading tools of everything that is set up (Notion when a token is saved,
+    /// timers, calendar), the Mac tools (apps, window dock, Quick Dock) and the calculator, whatever the wording, so the model decides what a request needs and no
+    /// word list has to. Nothing that adds, ticks, changes or deletes: those go to the cloud brain.
     /// Throws if Notion is clearly wanted but no token is saved.
     public func localKits(for text: String, needs: CloudNeeds) throws -> [ToolKit] {
         var kits: [ToolKit] = []
         if let kit = notion() {
-            kits.append(kit)
+            kits.append(ReadOnlyKit(kit, allowed: ["due", "search", "read_page", "query_database"]))
         } else if needs.notion {
             throw ChatError("Add a Notion token in Settings › Connections first, then share your pages with it in Notion.")
         }
         if let timers { kits.append(TimerTools(center: timers)) }
-        if let calendar { kits.append(CalendarTools(source: calendar)) }
+        if let calendar { kits.append(ReadOnlyKit(CalendarTools(source: calendar), allowed: ["list"])) }
+        if let mac { kits.append(MacTools(controls: mac)) }
         kits.append(MathTools())
         return kits
     }
@@ -87,8 +95,7 @@ public struct Toolbox {
                              + "For \"next\", \"after\" or \"before\" questions use days 60, find the item the user named in the list, "
                              + "then answer with the next matching item below it.")
             } else {
-                hints.append("The question is about Notion: to tick something off a list call notion_tick; otherwise call "
-                             + "notion_search first, then notion_read_page.")
+                hints.append("The question is about Notion: call notion_search first, then notion_read_page.")
             }
         }
         if kits.contains(where: { $0.name == "calendar" }), text.range(of: #"\b(calendar|schedule|free|busy|meeting|class|lecture)\b"#,
@@ -99,6 +106,27 @@ public struct Toolbox {
     }
 
     private static let dueWords = #"\b(due|deadlines?|assignments?|homework|problem sets?|to-?do|todo list|tasks?|midterms?|exams?|tests?|quiz(zes)?)\b"#
+
+    /// A change the local brain can't make (add, tick, move, delete...) to something that lives in an app the user can
+    /// open: the app's name to offer ("Calendar", or "Notion" only when it's connected), else nil.
+    public func openOffer(for text: String) -> String? {
+        guard apps != nil, text.range(of: Self.changeWords, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
+        if calendar != nil, text.range(of: #"\b(calendar|events?|meetings?|appointments?)\b"#,
+                                       options: [.regularExpression, .caseInsensitive]) != nil { return "Calendar" }
+        if notion() != nil, text.range(of: Self.notionWords + #"|\b(lists?|pages?)\b"#,
+                                       options: [.regularExpression, .caseInsensitive]) != nil { return "Notion" }
+        return nil
+    }
+
+    private static let changeWords = #"\b(add|put|tick|check off|cross off|mark|move|reschedule|rename|change|create|make|delete|remove|cancel|edit|update|finish|complete)\b"#
+
+    /// What Jarvis says when it offers: it can't do it, and the person is probably quicker.
+    public static func offerText(app: String) -> String {
+        "I can't make that change myself, and you're probably the better person for the job. Want me to open \(app)?"
+    }
+
+    /// Opens an app Jarvis offered, after a yes. Nil when the app can't be opened.
+    public func openApp(_ name: String) -> String? { apps?.open(name) }
 
     /// The cloud brain can't set timers or add events, so these get a hint instead of a made-up "done".
     public func cloudCantDo(_ text: String) -> String? {
@@ -130,9 +158,21 @@ public struct Toolbox {
         return CloudNeeds(photo: camera != nil && MacCamera.matches(text), notion: named || (sounds && notion() != nil))
     }
 
-    /// Takes the photo and loads the tools a request needs.
-    public func extras(for needs: CloudNeeds) async throws -> ChatExtras {
+    /// What the cloud brain can use on this Mac when Claude's access allows tools: the apps, window dock and Quick Dock,
+    /// timers, and the whole calendar (adding, moving and deleting too). Nil when none of them is set up.
+    public func cloudMacKit() -> ToolKit? {
+        var kits: [ToolKit] = []
+        if let mac { kits.append(MacTools(controls: mac)) }
+        if let timers { kits.append(TimerTools(center: timers)) }
+        if let calendar { kits.append(CalendarTools(source: calendar)) }
+        return kits.isEmpty ? nil : CombinedKit(kits)
+    }
+
+    /// Takes the photo and loads the tools a request needs, and what Claude's access allows.
+    public func extras(for needs: CloudNeeds, access: ClaudeAccess = .none) async throws -> ChatExtras {
         var extras = ChatExtras()
+        if access != .none { extras.mac = cloudMacKit() }
+        extras.computer = access == .full
         if needs.notion {
             guard let kit = notion() else {
                 throw ChatError("Add a Notion token in Settings › Connections first, then share your pages with it in Notion.")

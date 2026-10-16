@@ -9,6 +9,8 @@ public final class WidgetFeed {
     public static let dueMaxAge: TimeInterval = 10 * 60
     /// Only what's due today.
     public static let dueDays = 1
+    /// Unfinished items due up to this many days ago stay on "TODAY", greyed out (and dropped first when it's full).
+    public static let overdueDays = 30
 
     private let state: AppState
     private let player: NowPlayingSource
@@ -54,7 +56,7 @@ public final class WidgetFeed {
         lastDueFetch = now
         Task {
             do {
-                state.setDue(try await api.dueItems(days: Self.dueDays, now: now) ?? [])
+                state.setDue(try await api.dueItems(days: Self.dueDays, overdueDays: Self.overdueDays, now: now) ?? [])
             } catch {
                 lastDueFetch = nil
             }

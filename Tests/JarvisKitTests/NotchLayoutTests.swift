@@ -63,3 +63,16 @@ struct MediumPlayerTests {
         #expect(layout.mediumVideoSize == nil)
     }
 }
+
+@MainActor
+struct BrowserMiniTests {
+    @Test func onlyWhileTheWebTabShows() {
+        let state = AppState()
+        state.updateDock { $0.tab = .browser; $0.browserFullscreen = true }
+        #expect(state.layout.browserMini)
+        state.updateDock { $0.contentHidden = true }
+        #expect(!state.layout.browserMini, "the Web tab folded away")
+        state.updateDock { $0.contentHidden = false; $0.tab = .today }
+        #expect(!state.layout.browserMini, "another tab showing")
+    }
+}
