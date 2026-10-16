@@ -11,11 +11,11 @@ public struct NotchLayout: Sendable, Equatable {
     public var peekGrowth = CGSize(width: 80, height: 4)
     /// How far the short tab hangs below the notch on the first beat of opening.
     public var dropDepth: CGFloat = 20
-    public var openSize = CGSize(width: 560, height: 221 - 2 * NotchLayout.inputBarLift)
+    public var openSize = CGSize(width: 560, height: 218 - 2 * NotchLayout.inputBarLift)
     /// A further lift for the search field alone, evening out the gaps above and below it.
-    public static let inputBarNudge: CGFloat = 4
+    public static let inputBarNudge: CGFloat = 1
     /// Room under the search field, down to the panel's bottom edge (part of `openSize`'s height).
-    public static let inputBarBottom: CGFloat = 13
+    public static let inputBarBottom: CGFloat = 10
     /// The search field is moved up this much (and the panel made twice as much shorter), trimming the gap
     /// above it without changing the one below.
     public static let inputBarLift: CGFloat = 4
