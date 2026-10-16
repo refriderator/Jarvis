@@ -1,5 +1,11 @@
 # Jarvis
 
+**To install**, open Terminal (Applications › Utilities), paste this and press Return. Needs macOS 15.6 or newer.
+
+```sh
+git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
+```
+
 A Mac assistant that lives in the notch. Talk or type; it answers out loud and in captions. It can set timers, read
 and add calendar events, check Notion and open apps, and the notch holds a Today list, a Finder shelf, a system
 monitor, a small web browser and Picture in Picture video.
@@ -8,15 +14,8 @@ Small questions are answered on your Mac for free; bigger ones go to Claude or a
 
 ## Install
 
-Needs **macOS 15.6 or newer**. Nothing else has to be installed first.
-
-Open **Terminal** (in Applications › Utilities), paste this line and press Return:
-
-```sh
-git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
-```
-
-It builds Jarvis (a few minutes the first time) and puts it in Applications.
+The line at the top builds Jarvis (a few minutes the first time) and puts it in Applications. Nothing else has to
+be installed first.
 
 - If a window offers to install Apple's free **Command Line Tools**, install them, then paste the line again.
 - If asked to let *codesign* use a key, enter your Mac password and choose **Always Allow**.
