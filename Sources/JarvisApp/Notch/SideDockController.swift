@@ -62,6 +62,9 @@ final class SideDockController {
     /// to tell a title-bar drag from a click or a resize.
     private var poppedPress: (frame: CGRect, onTitleBar: Bool)?
     private lazy var outline = ReleaseOutline(skin: { [state] in state.skin })
+    /// The slot a window just left (its place in `parked`, and its side), for the window that goes to the side in
+    /// its place (a Quick Dock swap) to take, so the cards keep their order.
+    private var vacated: (index: Int, display: CGDirectDisplayID?, side: ScreenSide, desktop: Int?, at: Date)?
     /// The window being slid, from where to where, since when, and what to do once it's there.
     private var slide: (window: ForeignWindow, start: CGRect, target: CGRect, began: Date, done: (CGRect?) -> Void)?
 
@@ -103,23 +106,34 @@ final class SideDockController {
         guard !isParked(window) else { return true }
         guard let frame = windows.frame(of: window), let screen = Self.screen(for: frame) else { return false }
         let free = SideDock.freeSides(of: screen.frame, others: NSScreen.screens.map(\.frame))
-        guard let side = wanted.flatMap({ free.contains($0) ? $0 : nil })
-                ?? SideDock.side(for: frame, on: screen.frame, free: free) else { return false }
         let desktop = Desktops.of(window.element).first ?? Desktops.active(on: screen.displayID)
+        // A window that just left this desktop's side (swapped out by Quick Dock): this one takes its slot.
+        var slot = vacated.flatMap { v in
+            Date().timeIntervalSince(v.at) < 2 && v.display == screen.displayID && v.desktop == desktop
+                && free.contains(v.side) ? v : nil
+        }
+        vacated = nil
+        guard let side = wanted.flatMap({ free.contains($0) ? $0 : nil }) ?? slot?.side
+                ?? SideDock.side(for: frame, on: screen.frame, free: free) else { return false }
+        if slot?.side != side { slot = nil }
         let here = parked.filter { $0.desktop == desktop }
         // One limit per desktop for everything held, on the sides or in the strip.
         if here.count + minimizedOn(desktop) >= SideDock.maxWindows {
-            guard makeRoom, let oldest = here.first else { return false }
+            guard makeRoom, let oldest = here.first,
+                  let oldestIndex = parked.firstIndex(where: { $0.id == oldest.id }) else { return false }
             // Past a full side, the oldest goes back where it was and is minimized in the Dock.
             unpark(oldest.window)
+            vacated = nil
+            if let index = slot?.index, oldestIndex < index { slot?.index = index - 1 }
             windows.setMinimized(true, oldest.window)
         }
         let target = SideDock.parked(frame, side: side, screen: screen.frame, visible: screen.visibleFrame)
         let got = windows.setFrame(target, of: window) ?? target
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "?"
         log.debug("park: \(name, privacy: .public) on the \(side.rawValue, privacy: .public), got x \(got.minX) for \(target.minX)")
-        parked.append(ParkedWindow(window: window, original: frame, side: side, display: screen.displayID,
-                                   desktop: desktop, parkedAt: got))
+        let item = ParkedWindow(window: window, original: frame, side: side, display: screen.displayID,
+                                desktop: desktop, parkedAt: got)
+        parked.insert(item, at: min(slot?.index ?? parked.endIndex, parked.endIndex))
         startTracking()
         return true
     }
@@ -129,6 +143,7 @@ final class SideDockController {
     func unpark(_ window: ForeignWindow) -> CGRect? {
         guard let index = parked.firstIndex(where: { $0.window == window }) else { return nil }
         let item = parked.remove(at: index)
+        vacated = (index, item.display, item.side, item.desktop, Date())
         if popped?.id == item.id { popped = nil }
         if parked.isEmpty { hideCards() }
         return item.original

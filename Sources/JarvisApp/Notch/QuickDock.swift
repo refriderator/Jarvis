@@ -131,8 +131,9 @@ final class QuickDock {
         }
         let others = group.filter { $0 != front }
         if !others.isEmpty { log.debug("setting aside \(others.count)") }
-        others.forEach(dock.setAside)
+        // Out of its slot on the side first, so the window it swaps with goes into that slot (cards keep their order).
         dock.fill(front)
+        others.forEach(dock.setAside)
     }
 
     /// The ordinary windows on each display's showing desktop, front to back, one list per display.
