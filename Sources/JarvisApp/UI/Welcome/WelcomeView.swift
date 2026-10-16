@@ -128,10 +128,10 @@ private struct MeetStep: View {
 
     private static let highlights: [(icon: String, title: String, text: String)] = [
         ("waveform", "Talk or type", "Ask anything; answers are spoken and captioned."),
-        ("calendar", "Today", "Your events, what's due, and timers."),
+        ("calendar", "Today", "Your events, what's due, timers. Say \u{201C}good morning\u{201D}."),
         ("folder", "Finder", "A folder in the notch: drop files in, drag them out."),
         ("globe", "Web", "A small browser with tabs and bookmarks."),
-        ("rectangle.on.rectangle", "Hold windows", "Drag a window onto the notch to set it aside."),
+        ("rectangle.on.rectangle", "Hold windows", "Drag a window to the notch or a screen edge to set it aside."),
         ("pip", "Video", "Keep a Picture in Picture video in the notch."),
     ]
 
@@ -143,8 +143,7 @@ private struct MeetStep: View {
                     .font(.system(size: 46))
                     .foregroundStyle(state.skin.accent)
                 Text("Hi, I'm \(name)").font(.largeTitle.bold())
-                Text("I live in your notch. Small questions are answered on this Mac for free; bigger ones go to an AI "
-                     + "you choose.")
+                Text("I live in your notch. Quick jobs are done on this Mac for free; questions go to an AI you choose.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading), GridItem(.flexible(), alignment: .topLeading)],
@@ -215,10 +214,12 @@ private struct StartStep: View {
             tip("cursorarrow.click", "\(opens) to open \(name).", "Type in the field at the bottom, or press the mic.")
             tip("keyboard", "\(state.settings.talkHotkey.text) to talk, \(state.settings.typeHotkey.text) to type, from any app.",
                 "Esc stops \(name) talking. Shortcuts are in Settings › General.")
-            tip("text.bubble", "Try \u{201C}set a timer for 10 minutes\u{201D} or \u{201C}what's on tomorrow?\u{201D}",
+            tip("text.bubble", "Try \u{201C}good morning\u{201D}, \u{201C}set a timer for 10 minutes\u{201D} or \u{201C}open Safari\u{201D}.",
                 "Start with \u{201C}Claude,\u{201D} to send a question straight to the cloud brain.")
+            tip("rectangle.on.rectangle", "Drag a window by its title bar to the notch or a screen edge.",
+                "It waits on the side. Point at the edge to get it back.")
             tip("book", "Everything else is in Settings › Features.",
-                "A short guide to each part: the browser, holding windows, video, Notion and more.")
+                "A short guide to each part, with things to try.")
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

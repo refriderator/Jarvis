@@ -1,63 +1,64 @@
 # Jarvis
 
-**To install**, open Terminal (Applications › Utilities), paste this and press Return. Needs macOS 15.6 or newer.
+An assistant that lives in your Mac's notch. Talk or type to it.
+
+## Start Jarvis
+
+1. Open **Terminal**: press **⌘ Space**, type `Terminal`, press **Return**.
+2. Copy this line, paste it into Terminal, press **Return**:
+
+   ```sh
+   git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
+   ```
+
+3. Wait a few minutes. Jarvis opens by itself and walks you through setup.
+
+Needs macOS 15.6 or newer.
+
+- A window offers to install **Command Line Tools**? Click **Install**, wait, then do step 2 again.
+- Asked to let *codesign* use a key? Type your Mac password and click **Always Allow**.
+- Downloaded the ZIP? macOS blocks double-clicking the installer. Use step 2 instead.
+
+Next time, open Jarvis from Applications.
+
+## Use it
+
+- **Click the notch** and type, or press the mic.
+- From any app: **Option-Space** to talk, **Option-Shift-Space** to type, **Esc** to stop it talking.
+- Try "set a timer for 10 minutes", "what's on tomorrow?", "good morning", "open Safari".
+- **Settings › Features** explains everything else.
+
+Macs without a notch get a small pill at the top of the screen instead.
+
+## Update
 
 ```sh
-git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
+cd ~/Jarvis && git pull && sh "Install Jarvis.command"
 ```
 
-A Mac assistant that lives in the notch. Talk or type; it answers out loud and in captions. It can set timers, read
-and add calendar events, check Notion and open apps, and the notch holds a Today list, a Finder shelf, a system
-monitor, a small web browser and Picture in Picture video.
+Your settings are kept.
 
-Small questions are answered on your Mac for free; bigger ones go to Claude or another AI you choose.
+## Choose an AI
 
-## Install
-
-The line at the top builds Jarvis (a few minutes the first time) and puts it in Applications. Nothing else has to
-be installed first.
-
-- If a window offers to install Apple's free **Command Line Tools**, install them, then paste the line again.
-- If asked to let *codesign* use a key, enter your Mac password and choose **Always Allow**.
-
-Downloaded the ZIP instead? Double-clicking **Install Jarvis.command** gets blocked, since macOS won't open
-unsigned scripts from the internet. Type `sh ` (with a space) in Terminal, drag the installer onto the window, and
-press Return. Or, after the first try, go to System Settings › Privacy & Security and click **Open Anyway**.
-
-Jarvis opens and walks you through setup. **Settings › Features** explains everything else.
-
-To update: `cd ~/Jarvis && git pull && sh "Install Jarvis.command"`. Your settings are kept.
-
-| macOS | What works |
-| --- | --- |
-| 26 or newer | Everything |
-| 15.6 to 15.x | Everything except Apple's on-device AI, and the Liquid Glass skin looks frosted |
-
-Macs without a notch work too: Jarvis sits as a small pill at the top of the screen.
-
-## Choosing an AI
-
-Settings › Connections. The local brain answers first; harder questions go to the cloud brain.
+Settings › Connections. A free local brain answers first; harder questions go to the cloud brain.
 
 | Local (free, private) | Cloud |
 | --- | --- |
-| Apple's on-device model (macOS 26, Apple Intelligence) | Claude Code, with your Claude subscription |
-| A Qwen model Jarvis downloads for you | A Claude API key |
-| Any [Ollama](https://ollama.com) model | Any OpenAI-compatible service (OpenAI, OpenRouter, Groq, LM Studio...) |
+| Apple's on-device model (macOS 26) | Claude Code (Claude Pro or Max plan) |
+| A Qwen model Jarvis downloads | Codex (ChatGPT plan) |
+| Any [Ollama](https://ollama.com) model | A Claude API key, or any OpenAI-compatible service |
 
-Notion and the camera need one of the Claude options.
-
-**Calendars:** Jarvis uses the calendars in macOS's Calendar app, so any account added in System Settings ›
-Internet Accounts works: iCloud, Google, Outlook/Exchange, Yahoo, CalDAV.
+Notion and the camera need a Claude option. Calendars come from macOS's Calendar app: add accounts in System
+Settings › Internet Accounts.
 
 ## Privacy
 
-Everything stays on your Mac except questions sent to a cloud AI. Keys, the Notion token and passwords saved in the
-web browser are kept in your Keychain. The conversation log is off unless you turn it on.
+Only questions sent to a cloud AI leave your Mac. Keys and passwords are kept in your Keychain. The conversation log
+is off unless you turn it on.
 
 ## Uninstall
 
-Quit Jarvis from its menu-bar icon and delete `/Applications/Jarvis.app`. To remove everything, also delete
+Quit Jarvis from its menu-bar icon, then delete Jarvis from Applications. To remove its settings too, delete
 `~/Library/Application Support/Jarvis`.
 
 ## Developers

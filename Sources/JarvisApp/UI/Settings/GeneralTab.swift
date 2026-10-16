@@ -45,7 +45,7 @@ struct GeneralTab: View {
             } header: {
                 Text("Windows")
             } footer: {
-                Text("Drag a window by its title bar onto the notch to hold it. It waits just off the nearer side of the screen (drag a window to the left or right edge to put it there); point at that edge to see it, and click it to use it from the side. Needs Accessibility.")
+                Text("Drag a window by its title bar onto the notch, or to the left or right edge, to hold it there. Point at the edge to see it; click it to use it. Drag it by its title bar into the middle to let it go. Needs Accessibility.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

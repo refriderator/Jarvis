@@ -58,7 +58,7 @@ final class DockController {
     @ObservationIgnored private(set) var ignoreActivationUntil = Date.distantPast
 
     /// How far down from a window's top edge counts as its title bar (unified toolbars are about 52 pt).
-    private static let titleBarDepth: CGFloat = 56
+    static let titleBarDepth: CGFloat = 56
 
     init(state: AppState, windows: WindowControlling = AXWindowControl()) {
         self.state = state

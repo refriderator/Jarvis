@@ -48,17 +48,19 @@ final class SideDockController {
     /// The window popped out, the app that was in front, and whether the pointer has been on it yet.
     private var popped: (id: UUID, frame: CGRect, previous: NSRunningApplication?, entered: Bool)?
     private var leftAt: Date?
-    /// When the popped window closed or its app quit. macOS then brings some other app forward by itself, which
-    /// mustn't pop that app's held window out as if you'd ⌘-Tabbed to it.
-    private var poppedGoneAt: Date?
+    /// When another app came forward without you picking it: the popped window closed or an app quit (macOS
+    /// picks one), or it went back to the side and the app before it got the keyboard back. That app's held window
+    /// mustn't pop out as if you'd ⌘-Tabbed to it.
+    private var notPickedAt: Date?
     private var sliding: Timer?
     /// A card being dragged, and where it would land now.
     private var dragging: UUID?
     private var dropAt: (display: CGDirectDisplayID?, side: ScreenSide, index: Int)?
     /// ...or, dragged into the middle of a display, where its window goes when it's let go of there.
     private var releaseAt: CGRect?
-    /// Where the popped window was when the button went down on it, to tell a title-bar drag from a click.
-    private var poppedPress: CGPoint?
+    /// Where the popped window was when the button went down on it, and whether that press was on its title bar,
+    /// to tell a title-bar drag from a click or a resize.
+    private var poppedPress: (frame: CGRect, onTitleBar: Bool)?
     private lazy var outline = ReleaseOutline(skin: { [state] in state.skin })
     /// The window being slid, from where to where, since when, and what to do once it's there.
     private var slide: (window: ForeignWindow, start: CGRect, target: CGRect, began: Date, done: (CGRect?) -> Void)?
@@ -79,6 +81,11 @@ final class SideDockController {
                                             queue: .main) { [weak self] note in
             let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
             MainActor.assumeIsolated { self?.activated(pid) }
+        })
+        // An app can take a while to quit after its last window closes; macOS then brings another one forward.
+        observers.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil,
+                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.notPickedAt = Date() }
         })
     }
 
@@ -222,9 +229,13 @@ final class SideDockController {
             release(item, to: target)
             return true
         }
-        if poppedPress == nil { poppedPress = frame.origin }
-        // Only once the window itself is moving: a press inside it (a click, a text selection) isn't a drag.
-        guard poppedPress != frame.origin,
+        if poppedPress == nil {
+            poppedPress = (frame, pointer.y >= frame.maxY - DockController.titleBarDepth && frame.contains(pointer))
+        }
+        // Only once the window itself is moving, by its title bar: a press inside it (a click, a text selection)
+        // isn't a drag, and neither is dragging an edge (a resize moves the origin too, but changes the size).
+        guard let press = poppedPress, press.onTitleBar,
+              press.frame.origin != frame.origin, press.frame.size == frame.size,
               let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }),
               SideDock.inMiddle(pointer, screen: screen.frame) else {
             releaseAt = nil
@@ -399,6 +410,7 @@ final class SideDockController {
         leftAt = nil
         log.debug("retract: \(NSRunningApplication(processIdentifier: item.window.pid)?.localizedName ?? "?", privacy: .public)")
         if giveBackFocus, let previous = current.previous, !previous.isTerminated {
+            notPickedAt = Date()
             previous.activate()
         }
         // It keeps the size it has now: out next time at this size, and parked at it (off the edge as before).
@@ -428,10 +440,10 @@ final class SideDockController {
             }
             if let item, item.window.pid != pid { retract(giveBackFocus: false) }
         }
-        guard !state.settings.quickDock, !justLostPopped else { return }
+        guard !state.settings.quickDock, !notPicked else { return }
         // A moment for the app to bring its window forward.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, !justLostPopped, let front = windows.frontWindow(pid: pid),
+            guard let self, !notPicked, let front = windows.frontWindow(pid: pid),
                   let item = parked.first(where: { $0.window == front }), popped?.id != item.id else { return }
             pop(item.id)
         }
@@ -440,10 +452,10 @@ final class SideDockController {
     private func poppedGone() {
         popped = nil
         leftAt = nil
-        poppedGoneAt = Date()
+        notPickedAt = Date()
     }
 
-    private var justLostPopped: Bool { poppedGoneAt.map { Date().timeIntervalSince($0) < 1 } ?? false }
+    private var notPicked: Bool { notPickedAt.map { Date().timeIntervalSince($0) < 1 } ?? false }
 
     // MARK: Moving windows
 
