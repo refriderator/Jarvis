@@ -10,15 +10,24 @@ Small questions are answered on your Mac for free; bigger ones go to Claude or a
 
 Needs **macOS 15.6 or newer**. Nothing else has to be installed first.
 
-1. Download this project (**Code › Download ZIP**) and unzip it, or `git clone` it.
-2. Double-click **Install Jarvis.command**. If macOS won't open it, right-click it and choose **Open**.
-3. Wait a few minutes while it builds. If asked, install Apple's free Command Line Tools, then run the installer
-   again. If asked to let *codesign* use a key, enter your Mac password and choose **Always Allow**.
+Open **Terminal** (in Applications › Utilities), paste this line and press Return:
+
+```sh
+git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
+```
+
+It builds Jarvis (a few minutes the first time) and puts it in Applications.
+
+- If a window offers to install Apple's free **Command Line Tools**, install them, then paste the line again.
+- If asked to let *codesign* use a key, enter your Mac password and choose **Always Allow**.
+
+Downloaded the ZIP instead? Double-clicking **Install Jarvis.command** gets blocked, since macOS won't open
+unsigned scripts from the internet. Type `sh ` (with a space) in Terminal, drag the installer onto the window, and
+press Return. Or, after the first try, go to System Settings › Privacy & Security and click **Open Anyway**.
 
 Jarvis opens and walks you through setup. **Settings › Features** explains everything else.
 
-To update, get the new version and run the installer again; your settings are kept. In Terminal,
-`scripts/install.sh` does the same.
+To update: `cd ~/Jarvis && git pull && sh "Install Jarvis.command"`. Your settings are kept.
 
 | macOS | What works |
 | --- | --- |
