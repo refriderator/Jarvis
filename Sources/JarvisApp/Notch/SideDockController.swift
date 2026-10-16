@@ -62,9 +62,17 @@ final class SideDockController {
     /// to tell a title-bar drag from a click or a resize.
     private var poppedPress: (frame: CGRect, onTitleBar: Bool)?
     private lazy var outline = ReleaseOutline(skin: { [state] in state.skin })
-    /// Where each window last waited: its display, desktop, side, and place among that side's cards. Coming back
-    /// to the side (a Quick Dock swap, say), it goes back there, so windows keep their side and the cards their order.
-    private var homes: [(window: ForeignWindow, display: CGDirectDisplayID?, desktop: Int?, side: ScreenSide, place: Int)] = []
+    /// Where a window last waited: so that coming back to the side (a Quick Dock swap, say) it goes to the same side
+    /// and place, and windows keep their side and the cards their order.
+    private struct Home {
+        let window: ForeignWindow
+        let display: CGDirectDisplayID?
+        let desktop: Int?
+        let side: ScreenSide
+        /// Its place among that side's cards.
+        let place: Int
+    }
+    private var homes: [Home] = []
     /// The window being slid, from where to where, since when, and what to do once it's there.
     private var slide: (window: ForeignWindow, start: CGRect, target: CGRect, began: Date, done: (CGRect?) -> Void)?
 
@@ -127,9 +135,8 @@ final class SideDockController {
         log.debug("park: \(name, privacy: .public) on the \(side.rawValue, privacy: .public), got x \(got.minX) for \(target.minX)")
         let item = ParkedWindow(window: window, original: frame, side: side, display: screen.displayID,
                                 desktop: desktop, parkedAt: got)
-        // In `parked`, before the card now at its old place on that side (or after the side's last one).
-        let onSide = parked.indices.filter { parked[$0].display == item.display && parked[$0].side == side
-            && parked[$0].desktop == desktop }
+        // Before the card now at its old place on that side, or after the side's last.
+        let onSide = cards(display: item.display, side: side, desktop: desktop)
         let place = home?.side == side ? home?.place ?? onSide.count : onSide.count
         let at = place < onSide.count ? onSide[place] : (onSide.last.map { $0 + 1 } ?? parked.endIndex)
         parked.insert(item, at: at)
@@ -137,15 +144,20 @@ final class SideDockController {
         return true
     }
 
+    /// Indices in `parked` of the cards on one side of a display's desktop, in order.
+    private func cards(display: CGDirectDisplayID?, side: ScreenSide, desktop: Int?) -> [Int] {
+        parked.indices.filter { parked[$0].display == display && parked[$0].side == side && parked[$0].desktop == desktop }
+    }
+
     /// Lets go of a held window without moving it; returns where it was before it was held.
     @discardableResult
     func unpark(_ window: ForeignWindow) -> CGRect? {
         guard let index = parked.firstIndex(where: { $0.window == window }) else { return nil }
-        let place = parked[..<index].filter { $0.display == parked[index].display && $0.side == parked[index].side
-            && $0.desktop == parked[index].desktop }.count
+        let leaving = parked[index]
+        let place = cards(display: leaving.display, side: leaving.side, desktop: leaving.desktop).firstIndex(of: index) ?? 0
         let item = parked.remove(at: index)
         homes.removeAll { $0.window == window }
-        homes.append((window, item.display, item.desktop, item.side, place))
+        homes.append(Home(window: window, display: item.display, desktop: item.desktop, side: item.side, place: place))
         if popped?.id == item.id { popped = nil }
         if parked.isEmpty { hideCards() }
         return item.original

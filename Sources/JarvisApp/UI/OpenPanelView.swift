@@ -210,7 +210,7 @@ struct OpenPanelView: View {
             // Nudged up into the room taken off the panel's height for it, so it sits a little closer to what's
             // above than the even split would put it.
             InputBar(state: state, assistant: assistant, voice: voice)
-                .offset(y: -NotchLayout.inputBarLift)
+                .offset(y: -NotchLayout.inputBarLift - NotchLayout.inputBarNudge)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22)

@@ -35,7 +35,8 @@ struct DisplayTab: View {
     private func shows(_ item: TickerItem) -> Binding<Bool> {
         Binding(get: { state.settings.tickerItems.contains(item) }, set: { on in
             state.update { settings in
-                let picked = Set(settings.tickerItems).symmetricDifference(settings.tickerItems.contains(item) == on ? [] : [item])
+                var picked = Set(settings.tickerItems)
+                if on { picked.insert(item) } else { picked.remove(item) }
                 settings.tickerItems = TickerItem.allCases.filter(picked.contains)
             }
         })
