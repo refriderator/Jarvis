@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Jarvis</string>
+    <key>CFBundleDisplayName</key>
+    <string>Jarvis</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.jarvis-public</string>
+    <key>CFBundleExecutable</key>
+    <string>Jarvis</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Jarvis listens when you talk to it.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Jarvis turns what you say into text, on this Mac.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Jarvis uses the camera only when you ask it to look at something.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Jarvis reads and adds calendar events when you ask.</string>
+    <key>NSLocationUsageDescription</key>
+    <string>Jarvis shows the weather where you are. Or set a city in Settings instead.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Jarvis shows the weather where you are. Or set a city in Settings instead.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Jarvis shows and controls what's playing in Music or Spotify, and reads which folder a Finder window you put in the notch shows.</string>
+</dict>
+</plist>
