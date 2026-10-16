@@ -6,6 +6,8 @@ import CoreGraphics
 public struct NotchLayout: Sendable, Equatable {
     /// The hardware notch, or the fallback pill on Macs without one.
     public var notch: CGRect
+    /// True when `notch` is the fallback pill (a display without a hardware notch), which shows the ticker.
+    public var isPill = false
     public var peekGrowth = CGSize(width: 80, height: 4)
     /// How far the short tab hangs below the notch on the first beat of opening.
     public var dropDepth: CGFloat = 20

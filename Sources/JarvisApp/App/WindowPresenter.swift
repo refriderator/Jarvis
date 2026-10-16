@@ -29,9 +29,10 @@ final class WindowPresenter {
         window?.makeKeyAndOrderFront(nil)
     }
 
-    /// Centered on the Mac's own display, like the notch, not wherever macOS would pick.
+    /// Centered on the display the pointer is on, not wherever macOS would pick.
     private static func center(_ window: NSWindow) {
-        guard let screen = NSScreen.menuBarScreen else { return window.center() }
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
+        else { return window.center() }
         let area = screen.visibleFrame
         window.setFrameOrigin(NSPoint(x: area.midX - window.frame.width / 2, y: area.midY - window.frame.height / 2 + area.height / 8))
     }

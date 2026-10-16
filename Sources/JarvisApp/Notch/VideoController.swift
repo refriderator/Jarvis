@@ -449,7 +449,7 @@ final class VideoController {
     /// the dropdown.
     func giveBack() {
         guard let window, let original else { return forget() }
-        let area = NSScreen.menuBarScreen?.visibleFrame ?? .zero
+        let area = state.notchScreen?.visibleFrame ?? .zero
         let margin: CGFloat = 20
         let width = min(max(original.width * 1.5, 420), area.width * 0.45).rounded()
         let height = (width * original.height / max(original.width, 1)).rounded()

@@ -19,12 +19,12 @@ final class NoticePanel {
 
     func show(_ text: String) {
         let pointer = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.menuBarScreen
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? state.notchScreen
         else { return }
         let view = NSHostingView(rootView: NoticeView(text: text, skin: state.skin))
         let size = view.fittingSize
         // Under the notch where there is one, under the menu bar elsewhere.
-        let top = screen == NSScreen.menuBarScreen ? state.layout.notch.minY : screen.visibleFrame.maxY
+        let top = screen == state.notchScreen ? state.layout.notch.minY : screen.visibleFrame.maxY
         panel.contentView = view
         panel.setFrame(CGRect(x: screen.frame.midX - size.width / 2, y: top - 6 - size.height,
                               width: size.width, height: size.height), display: true)

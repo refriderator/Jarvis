@@ -45,6 +45,14 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Sites the Web tab never offers to save a password for (hosts).
     public var passwordNeverSave: [String] = []
 
+    // Display
+    /// The display Jarvis's notch is on (`NSScreen`'s vendor-model-serial); empty means this Mac's own.
+    public var notchDisplay = ""
+    /// On a display without a hardware notch, the bar shows these one at a time; empty leaves it plain black.
+    public var tickerItems: [TickerItem] = [.time, .date, .music, .weather, .nextEvent]
+    /// Seconds each line shows for.
+    public var tickerSeconds = 5.0
+
     // Connections (keys and tokens live in the Keychain, not here)
     /// Who answers what the local brain can't.
     public var cloudBrain: CloudBrain = .claudeCode

@@ -47,6 +47,17 @@ public final class WidgetFeed {
         refreshDue(now: now)
     }
 
+    /// The ticker on a notch-less display shows the weather and the next event with the panel closed, so they're
+    /// kept fresh every few minutes too (Notion isn't: it's only asked when the panel opens).
+    public func tickerRefresh(now: Date = .now) {
+        if !askedPlayer, state.nowPlaying == nil {
+            askedPlayer = true
+            state.setNowPlaying(player.current())
+        }
+        refreshWeather(now: now)
+        refreshAgenda(now: now)
+    }
+
     func refreshDue(now: Date) {
         guard let api = notion() else {
             if !state.due.isEmpty { state.setDue([]) }

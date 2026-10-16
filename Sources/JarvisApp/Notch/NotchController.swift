@@ -31,6 +31,8 @@ final class NotchController {
     /// The reading pause ended while the pointer was on the panel; leaving it ends the caption.
     private var captionWaitsForPointer = false
     private var returnFocus: DispatchWorkItem?
+    /// Keeps the ticker's weather and next event fresh while the notch is a pill (see `WidgetFeed.tickerRefresh`).
+    private var tickerTimer: Timer?
     /// Long enough for the closing animation (see `NotchMotion`) to finish.
     private let closeAnimationSeconds = 0.9
 
@@ -92,6 +94,22 @@ final class NotchController {
         observeMode()
         observeCaption()
         observeReady()
+        observeDisplay()
+    }
+
+    /// The notch moved to another display (Settings › Display, or the menu): lay it out there, and give the
+    /// display it left a strip of its own.
+    private func observeDisplay() {
+        withObservationTracking {
+            _ = state.settings.notchDisplay
+            _ = state.settings.tickerItems
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.relayout()
+                self?.trays?.rebuild()
+                self?.observeDisplay()
+            }
+        }
     }
 
     /// Windows held on the sides go back where they were (on quitting, so none are left off the screen).
@@ -100,9 +118,17 @@ final class NotchController {
     }
 
     private func relayout() {
-        guard let screen = NSScreen.menuBarScreen else { return }
+        guard let screen = state.notchScreen else { return }
         let layout = screen.notchLayout
         state.updateLayout(layout)
+        tickerTimer?.invalidate()
+        tickerTimer = nil
+        if layout.isPill, !state.settings.tickerItems.isEmpty {
+            feed.tickerRefresh()
+            tickerTimer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.feed.tickerRefresh() }
+            }
+        }
         // Size the window for the biggest the panel gets: open with a caption.
         var biggest = layout
         // A wide video (cinema's 2.4:1) with the Video button showing makes the widest dropdown.

@@ -1,7 +1,7 @@
 import JarvisKit
 import SwiftUI
 
-/// The slim menu-bar menu: Talk / Type · Stop talking · Timers · Skin · Tokens · Settings · Quit.
+/// The slim menu-bar menu: Talk / Type · Stop talking · Quick Dock · Skin · Open on · Display · Timers · Settings · Quit.
 struct JarvisMenu: View {
     let state: AppState
     let voice: VoiceSession?
@@ -16,6 +16,18 @@ struct JarvisMenu: View {
         if state.voice == .speaking {
             Button("Stop Talking") { voice?.stopSpeaking() }
         }
+        Toggle("Quick Dock", isOn: Binding(get: { state.settings.quickDock }, set: { on in state.update { $0.quickDock = on } }))
+        Divider()
+        Picker("Skin", selection: state.binding(\.skinID)) {
+            ForEach(SkinCatalog.all) { skin in
+                Text(skin.name).tag(skin.id)
+            }
+        }
+        Picker("Open the Notch On", selection: state.binding(\.openTrigger)) {
+            Text("Click (hover peeks)").tag(OpenTrigger.click)
+            Text("Hover").tag(OpenTrigger.hover)
+        }
+        DisplayPicker(state: state, title: "Notch On")
         if !state.timers.isEmpty {
             Divider()
             Menu("Timers") {
@@ -31,24 +43,28 @@ struct JarvisMenu: View {
             }
         }
         Divider()
-        Picker("Skin", selection: state.binding(\.skinID)) {
-            ForEach(SkinCatalog.all) { skin in
-                Text(skin.name).tag(skin.id)
-            }
-        }
-        if state.settings.showTokens {
-            Divider()
-            Text("Tokens today: \(state.tokens.today.formatted())")
-        }
-        Picker("Open the Notch On", selection: state.binding(\.openTrigger)) {
-            Text("Click (hover peeks)").tag(OpenTrigger.click)
-            Text("Hover").tag(OpenTrigger.hover)
-        }
-        Divider()
-        Toggle("Quick Dock", isOn: Binding(get: { state.settings.quickDock }, set: { on in state.update { $0.quickDock = on } }))
         Button("Settings…", action: openSettings)
             .keyboardShortcut(",")
         Button("Quit Jarvis") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+}
+
+/// Which plugged-in display the notch is on. It shows where the notch really is: a picked display that's
+/// unplugged shows as the Mac's own, and the notch goes back to it once it's plugged in again.
+struct DisplayPicker: View {
+    let state: AppState
+    let title: String
+
+    var body: some View {
+        let screens = NSScreen.screens
+        let current = state.notchScreen
+        Picker(title, selection: Binding(
+            get: { current.map { $0.isBuiltIn ? "" : $0.key } ?? "" },
+            set: { key in state.update { $0.notchDisplay = key } })) {
+            ForEach(screens, id: \.key) { screen in
+                Text(screen.title).tag(screen.isBuiltIn ? "" : screen.key)
+            }
+        }
     }
 }

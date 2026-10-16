@@ -44,10 +44,11 @@ final class ScreenTrays {
         }
     }
 
-    private func rebuild() {
+    /// One strip per display other than the notch's (after a display is plugged in, or the notch moves).
+    func rebuild() {
         trays.values.forEach { $0.panel.orderOut(nil) }
         trays = [:]
-        let notched = NSScreen.menuBarScreen
+        let notched = state.notchScreen
         for screen in NSScreen.screens where screen != notched {
             guard let id = screen.displayID else { continue }
             let model = TrayModel()

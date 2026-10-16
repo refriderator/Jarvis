@@ -172,6 +172,10 @@ struct NotchView: View {
                     .frame(maxHeight: .infinity, alignment: .top)
                     .transition(.opacity)
             }
+        case .idle where state.layout.isPill && !state.video.held:
+            // A display without a hardware notch: the pill shows the ticker instead of sitting there black.
+            TickerView(state: state)
+                .transition(.opacity)
         case .idle, .drop:
             EmptyView()
         case .peek:

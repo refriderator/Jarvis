@@ -68,12 +68,12 @@ final class DockController {
             ?? FileManager.default.homeDirectoryForCurrentUser
         // Each desktop has its own strip: follow the desktop showing, and drop windows brought back some
         // other way (the Dock, ⌘-Tab) or closed.
-        state.updateDock { $0.desktop = Desktops.active(on: NSScreen.menuBarScreen?.displayID) }
+        state.updateDock { $0.desktop = Desktops.active(on: state.notchScreen?.displayID) }
         spaceWatch = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.state.updateDock { $0.desktop = Desktops.active(on: NSScreen.menuBarScreen?.displayID) }
+                self?.state.updateDock { $0.desktop = Desktops.active(on: self?.state.notchScreen?.displayID) }
                 self?.prune()
             }
         }
@@ -241,7 +241,7 @@ final class DockController {
     /// Holding on the sides, it's slid off the nearer edge instead (minimized only when it can't be).
     func holdApp(_ window: ForeignWindow) {
         if sides.park(window, makeRoom: false) { return }
-        let desktop = Desktops.of(window.element).first ?? Desktops.active(on: NSScreen.menuBarScreen?.displayID)
+        let desktop = Desktops.of(window.element).first ?? Desktops.active(on: state.notchScreen?.displayID)
         // Held on the sides counts too: 6 per desktop in all.
         guard state.dock.apps(on: desktop).count < NotchDock.maxApps else { return NSSound.beep() }
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "App"
@@ -363,7 +363,7 @@ final class DockController {
               app.processIdentifier != getpid(), app.bundleIdentifier != FinderFolder.bundleID || hasFinderWindow(app),
               let window = windows.frontWindow(pid: app.processIdentifier), AXWindowControl.isStandard(window),
               !windows.isMinimized(window) else { return nil }
-        let here = Desktops.active(on: NSScreen.menuBarScreen?.displayID)
+        let here = Desktops.active(on: state.notchScreen?.displayID)
         guard here == nil || Desktops.of(window.element).contains(here!) else { return nil }
         return window
     }
@@ -485,7 +485,8 @@ final class DockController {
 
     /// A window of `size` hanging from `point` by the middle of its title bar, kept below the menu bar.
     private static func hanging(_ size: CGSize, from point: CGPoint) -> CGRect {
-        let top = min(point.y + 12, NSScreen.menuBarScreen?.visibleFrame.maxY ?? point.y)
+        let screen = NSScreen.screens.first { $0.frame.contains(point) }
+        let top = min(point.y + 12, screen?.visibleFrame.maxY ?? point.y)
         return CGRect(x: point.x - size.width / 2, y: top - size.height, width: size.width, height: size.height)
     }
 

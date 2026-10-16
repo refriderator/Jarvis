@@ -11,6 +11,7 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape") { GeneralTab(state: state) }
             Tab("Voice", systemImage: "waveform") { VoiceTab(state: state) }
             Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(state: state) }
+            Tab("Display", systemImage: "display") { DisplayTab(state: state) }
             Tab("Connections", systemImage: "link") { ConnectionsTab(state: state, downloader: downloader) }
             Tab("Usage", systemImage: "number") { UsageTab(state: state) }
             Tab("Features", systemImage: "book") { FeaturesTab(state: state) }

@@ -28,7 +28,8 @@ Next time, open Jarvis from Applications.
 - Try "set a timer for 10 minutes", "what's on tomorrow?", "good morning", "open Safari".
 - **Settings › Features** explains everything else.
 
-Macs without a notch get a small pill at the top of the screen instead.
+To put the notch on another display, pick it in the menu-bar menu under **Notch On**. Displays without a notch
+get a bar that shows the time, the song and more (Settings › Display).
 
 ## Update
 
