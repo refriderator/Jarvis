@@ -214,7 +214,7 @@ struct OpenPanelView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22)
-        .padding(.bottom, 10)
+        .padding(.bottom, NotchLayout.inputBarBottom)
         .frame(maxHeight: .infinity, alignment: .top)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: state.captionActive)
         .animation(.spring(duration: 0.4, bounce: 0.1), value: state.captionPinned)

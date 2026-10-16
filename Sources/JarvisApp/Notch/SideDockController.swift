@@ -190,10 +190,10 @@ final class SideDockController {
         }
         let pointer = NSEvent.mouseLocation
         if dragging != nil { return trackDrag(pointer) }
+        // Cards first: they can be out over a popped window (its edge touched again).
+        if let showing { return trackCards(pointer, showing: showing) }
         if popped != nil { return trackPopped(pointer) }
-        if let showing {
-            trackCards(pointer, showing: showing)
-        } else if let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) {
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) {
             for side in ScreenSide.allCases where SideDock.atEdge(pointer, side: side, screen: screen.frame,
                                                                   visible: screen.visibleFrame) {
                 let here = waiting(on: side, of: screen)
@@ -222,6 +222,14 @@ final class SideDockController {
             popped?.frame = now
         }
         if trackPoppedDrag(pointer, frame: current.frame) { return }
+        // The edge it came out of stays free (it sits `SideDock.popInset` in): touching it sends the window back to
+        // its place and brings the cards out instead.
+        if NSEvent.pressedMouseButtons == 0, let item = parked.first(where: { $0.id == current.id }),
+           let screen = NSScreen.screens.first(where: { $0.displayID == item.display }),
+           SideDock.atEdge(pointer, side: item.side, screen: screen.frame, visible: screen.visibleFrame) {
+            retract(giveBackFocus: true)
+            return showCards(waiting(on: item.side, of: screen), side: item.side, on: screen)
+        }
         if current.frame.insetBy(dx: -SideDock.leaveMargin, dy: -SideDock.leaveMargin).contains(pointer) {
             popped?.entered = true
             leftAt = nil
