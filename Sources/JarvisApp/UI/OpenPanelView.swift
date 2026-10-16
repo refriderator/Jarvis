@@ -30,13 +30,6 @@ struct OpenPanelView: View {
                 // its content away and back), Keep on the Finder tab, and the next timer while a caption is up.
                 PanelTabs(selected: state.layout.hidesContent ? nil : state.dock.tab, tint: tint,
                           accent: state.skin.accent, select: dock.select)
-                // Between the tabs and the notch while Quick Dock is on; nothing while it's off.
-                if state.settings.quickDock {
-                    Label("Quick Dock", systemImage: "rectangle.on.rectangle")
-                        .modifier(TabSegment(on: true, tint: tint, accent: state.skin.accent))
-                        .help("Quick Dock is on: one window at a time, the rest wait on the sides")
-                        .transition(.opacity)
-                }
                 if state.captionActive, let timer = state.timers.first {
                     Label { TimerCountdown(timer: timer) } icon: { Image(systemName: "timer") }
                         .font(.callout.weight(.semibold))
