@@ -74,12 +74,12 @@ final class DockController {
             ?? FileManager.default.homeDirectoryForCurrentUser
         // Each desktop has its own strip: follow the desktop showing, and drop windows brought back some
         // other way (the Dock, ⌘-Tab) or closed.
-        state.updateDock { $0.desktop = Desktops.active(on: state.notchScreen?.displayID) }
+        notchMoved()
         spaceWatch = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.state.updateDock { $0.desktop = Desktops.active(on: self?.state.notchScreen?.displayID) }
+                self?.notchMoved()
                 self?.prune()
             }
         }
@@ -120,6 +120,15 @@ final class DockController {
         for app in gone { heldAt[app.id] = nil }
         for app in gone { minimized[app.id] = nil }
         state.updateDock { dock in dock.apps.removeAll { app in gone.contains { $0.id == app.id } } }
+    }
+
+    /// The desktop showing on the notch's display, whose held windows the notch's strip lists. Read again when the
+    /// desktop changes and whenever the notch is laid out (it moved display, or one was plugged in): left on the old
+    /// display's, the notch listed the windows held there (which that display's tray lists now) and none of its new
+    /// display's. Held windows never move with it: each stays on the display it was put on, in that display's strip.
+    func notchMoved() {
+        let desktop = Desktops.active(on: state.notchScreen?.displayID)
+        if state.dock.desktop != desktop { state.updateDock { $0.desktop = desktop } }
     }
 
     func boxMoved(_ frameInPanel: CGRect?) {

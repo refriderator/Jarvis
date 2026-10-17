@@ -38,6 +38,9 @@ public struct Settings: Codable, Equatable, Sendable {
     /// there is set aside on the sides of the screen (up to 6 per desktop). It won't turn on with more than 7 windows on a
     /// desktop, and turns itself off when a desktop is moved in Mission Control.
     public var quickDock = false
+    /// The cards for windows held on the sides show a live picture of each window (needs Screen Recording); off,
+    /// its app's icon and title.
+    public var windowPreviews = true
     /// Folders pinned to the Finder tab's sidebar, as paths.
     public var finderPins: [String] = []
     /// The Web tab's start page.

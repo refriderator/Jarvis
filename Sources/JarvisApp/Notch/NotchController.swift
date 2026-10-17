@@ -92,6 +92,7 @@ final class NotchController {
         missionControl = MissionControlWatch { [weak self] showing in
             guard let self else { return }
             quickDock?.missionControl(showing: showing)
+            dock.sides.missionControl(showing: showing)
             if showing { state.send(.dismiss) }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = showing ? 0.12 : 0.25
@@ -161,6 +162,7 @@ final class NotchController {
         guard let screen = state.notchScreen else { return }
         let layout = screen.notchLayout
         state.updateLayout(layout)
+        dock.notchMoved()
         tickerTimer?.invalidate()
         tickerTimer = nil
         if layout.isPill, !state.settings.tickerItems.isEmpty {

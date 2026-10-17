@@ -51,10 +51,10 @@ struct ToolValidationTests {
     }
 
     @Test func timerRefusesNonsense() async {
-        #expect(await start(["seconds": 0]).isEmpty)
-        #expect(await start(["seconds": 999_999]).isEmpty)
-        #expect(await start(["at": "25:00"]).isEmpty)
-        #expect(await start(["seconds": 90]).first?.seconds == 90)
+        #expect(await start(["duration": "a while"]).isEmpty)
+        #expect(await start(["duration": "30 hours"]).isEmpty)
+        #expect(await start(["seconds": 90]).isEmpty, "the length is given in words")
+        #expect(await start(["duration": "an hour and a half"]).first?.seconds == 5400)
     }
 
     @Test func calculatorIsExactAndRefusesNonsense() async throws {
@@ -103,16 +103,15 @@ struct LocalToolAssistantTests {
         for _ in 0..<200 where state.turns.last?.isPending == true { await Task.yield() }
     }
 
-    @Test func qwenSetsAReminderWithTheTimerTool() async {
+    @Test func qwenSetsATimerWithTheWordsItHeard() async {
         let state = AppState()
-        let qwen = ScriptedBrain([#"{"tool": "timer_start", "arguments": {"seconds": 1200, "note": "check the laundry"}}"#,
+        let qwen = ScriptedBrain([#"{"tool": "timer_start", "arguments": {"duration": "twenty minutes"}}"#,
                                   "Done, I'll remind you in 20 minutes."])
         let cloud = FakeBrain("Claude", answer: "unused")
         let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in cloud },
                                   tools: Toolbox(timers: TimerCenter(state: state)))
-        await run(assistant, "remind me to check the laundry in like twenty-ish minutes", state: state)
+        await run(assistant, "set a timer for like twenty-ish minutes for the laundry", state: state)
         #expect(state.timers.first?.seconds == 1200)
-        #expect(state.timers.first?.note == "check the laundry")
         #expect(state.turns.last?.answer == "Done, I'll remind you in 20 minutes.")
         #expect(state.turns.last?.source == "Qwen3 8B")
         #expect(cloud.asked.isEmpty)
@@ -176,16 +175,15 @@ struct LocalToolAssistantTests {
 
     @Test func aModelGoingRoundInCirclesIsNotShownAsAnAnswer() async {
         let state = AppState()
-        let call = #"{"tool": "calendar_list", "arguments": {"start": "2026-10-17", "end": "2026-10-18"}}"#
+        let call = #"{"tool": "math_calculate", "arguments": {"expression": "17*23"}}"#
         let qwen = ScriptedBrain([call, call, call])
-        let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil },
-                                  tools: Toolbox(calendar: FakeCalendar()))
-        await run(assistant, "what do i have tomorrow", state: state)
+        let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil }, tools: Toolbox())
+        await run(assistant, "seventeen twenty-threes, roughly", state: state)
         #expect(qwen.asked.count == 2, "the repeated call is stopped, not run again")
         #expect(state.turns.last?.failed == true, "no raw tool result passed off as the answer")
     }
 
-    @Test func qwenCanOnlyReadTheCalendar() async {
+    @Test func qwenHasNoCalendarTools() async {
         let state = AppState()
         let calendar = FakeCalendar()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
@@ -195,8 +193,8 @@ struct LocalToolAssistantTests {
         let assistant = Assistant(state: state, makeLocal: { _ in qwen }, makeCloud: { _ in nil },
                                   tools: Toolbox(calendar: calendar))
         await run(assistant, "move my study group to a better time", state: state)
-        #expect(calendar.items.isEmpty, "the local brain only gets reading tools")
-        #expect(qwen.asked.last?.last?.text.contains("isn't available") == true)
+        #expect(calendar.items.isEmpty, "the calendar goes to the cloud brain")
+        #expect(qwen.asked.last?.last?.text.contains("There is no tool called calendar_add") == true)
     }
 
     @Test func qwenWritesTheEmailItself() async {

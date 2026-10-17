@@ -63,19 +63,33 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - Each desktop has its own strip. Other displays get a small tray from the menu bar (`ScreenTrays`); the Mac's own
   display, while the notch is on another, gets a tab with the dot on the hardware notch's right (like the apps' tab
   beside the notch, starting under the notch's flat bottom, clear of its round corner) that opens to the same grid
-  hanging below the notch, wider than it so no corner hides behind the notch's round ones. A tray's window covers
+  hanging below the notch, wider than it so no corner hides behind the notch's round ones. Between the two, one
+  goes in before the other comes out (the grid folds up behind the notch, then the tab springs out; and back):
+  morphed in one go, the shapes slid across each other. A tray's window covers
   every stage and takes clicks only over the tray. A window dragged over a tray shows its app's icon in the next
   empty place.
 - Letting go puts a window back where it was; quitting Jarvis puts every held window back.
+- Picking a held window in Mission Control pops it out like its card does, and the first move of the pointer away
+  (not onto it) sends it back: it was never under the pointer, so otherwise it stayed out. ⌘-Tab still waits for the
+  pointer to have been on it, since you'd move toward it to use it.
+- The cards show live pictures of the windows (Settings › General "Window previews", on by default; needs Screen
+  Recording, asked for only from that row), else the app's icon and title.
 - A window put in the notch (or a tray) is held on that display, wherever it was dragged from: parked on that
   display's side, so it shows in that display's strip. Held on its own display, it showed on the side but not in
   the notch it was put in. Letting go still puts it back where it really was.
+- Moving the notch to another display moves no held window: each stays on the display it was put on and shows in
+  that display's strip (the notch's, or its tray). The notch's strip follows the desktop showing on its own display,
+  read again on every layout (`DockController.notchMoved`); left on the old one, it listed the other display's.
 - A window taken out of a side (popped out, dragged by its title bar) never opens the notch's drop box or a tray:
   its drops are the middle of the display (let go of) or another edge (moved there).
 - Why cards and not real shrunk windows: macOS has no public way to scale another app's window, and raising one
   without activating its app doesn't put it above the app in front. The first version held the real window under a
   hole in the notch; macOS owns real windows' desktops, stacking and Mission Control, so it glitched on all three.
 - Desktops are read (never changed) through SkyLight's private calls (`Desktops`); there is no public API.
+- Jarvis's own windows never slide: each goes straight where it ends and its content animates inside it. A window
+  moved frame by frame makes AppKit set the cursor again each frame, and a customized pointer (Accessibility's size
+  or colour) is redrawn on the CPU each time (`_AXFMouseCursorGenerator`), on the main thread: the side cards
+  stuttered. Found by sampling the app while they stuttered.
 - Accessibility calls wait for the other app on the main thread, so they're kept rare and short: held windows are
   checked twice a second (not while cards are out), and every call gives up after 0.5 s (`AXWindowControl.timeout`).
   Checked 30 times a second with the 6 s default, a busy app made the side cards stutter.

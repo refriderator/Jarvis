@@ -1,6 +1,7 @@
 import Foundation
 
-/// Timers and reminders as tools for the local brain. Values are checked here, not trusted.
+/// Timers as tools for the local brain (and the cloud one). Timers only, as everywhere in Jarvis. The length is
+/// given as said and read by `TimerCommand.seconds(in:)`: the model copies words instead of working out seconds.
 public struct TimerTools: ToolKit {
     public let name = "timer"
     public static let maxSeconds = 24 * 3600
@@ -10,12 +11,14 @@ public struct TimerTools: ToolKit {
         self.center = center
     }
 
-    public var instructions: String { "Set, list and cancel timers and reminders." }
+    public var instructions: String {
+        "Set, list and cancel timers. Timers only: for an alarm or a reminder, answer \"\(TimerCommand.timersOnlyReply)\""
+    }
 
     public var definitions: [ToolDefinition] {
         [
-            ToolDefinition(name: "start", description: "Start a timer or reminder, either after some seconds or at a clock time today/tomorrow. Add a short note for reminders.",
-                           schema: #"{"type":"object","properties":{"seconds":{"type":"integer"},"at":{"type":"string","description":"24-hour HH:MM"},"note":{"type":"string"}}}"#),
+            ToolDefinition(name: "start", description: "Start a timer. Give its length in the user's words, like \"10 minutes\" or \"an hour and a half\".",
+                           schema: #"{"type":"object","properties":{"duration":{"type":"string"}},"required":["duration"]}"#),
             ToolDefinition(name: "list", description: "List running timers.", schema: #"{"type":"object","properties":{}}"#),
             ToolDefinition(name: "cancel", description: "Cancel all running timers.", schema: #"{"type":"object","properties":{}}"#),
         ]
@@ -26,10 +29,9 @@ public struct TimerTools: ToolKit {
         return try await MainActor.run {
             switch name {
             case "start":
-                let seconds = try Self.seconds(input, now: .now)
-                let note = (input["note"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                center.start(seconds, note: note, alarm: (input["at"] as? String).map { !$0.isEmpty } ?? false)
-                return "Timer set for \(TimerCommand.describe(seconds))" + (note.map { " (\($0))" } ?? "") + "."
+                let seconds = try Self.seconds(input)
+                center.start(seconds)
+                return "Timer set for \(TimerCommand.describe(seconds))."
             case "list":
                 return center.handle("how long is left on my timer") ?? "No timers."
             case "cancel":
@@ -40,19 +42,12 @@ public struct TimerTools: ToolKit {
         }
     }
 
-    /// Seconds from `seconds`, or until the next `at` (today, else tomorrow). Refuses anything over a day.
-    static func seconds(_ input: [String: Any], now: Date) throws -> Int {
-        if let at = input["at"] as? String, !at.isEmpty {
-            let parts = at.split(separator: ":").compactMap { Int($0) }
-            guard parts.count == 2, (0..<24).contains(parts[0]), (0..<60).contains(parts[1]),
-                  let next = Calendar.current.nextDate(after: now, matching: DateComponents(hour: parts[0], minute: parts[1]),
-                                                       matchingPolicy: .nextTime) else {
-                throw ChatError("\"at\" must be a 24-hour time like 17:30.")
-            }
-            return max(1, Int(next.timeIntervalSince(now).rounded()))
+    /// Seconds in `duration`. Refuses none, or anything over a day.
+    static func seconds(_ input: [String: Any]) throws -> Int {
+        let duration = input["duration"] as? String ?? ""
+        guard let seconds = TimerCommand.seconds(in: duration), (1...maxSeconds).contains(seconds) else {
+            throw ChatError("duration must be a length like \"10 minutes\" or \"an hour and a half\", up to 24 hours.")
         }
-        let seconds = (input["seconds"] as? NSNumber)?.intValue ?? 0
-        guard (1...maxSeconds).contains(seconds) else { throw ChatError("seconds must be between 1 and \(maxSeconds).") }
         return seconds
     }
 }

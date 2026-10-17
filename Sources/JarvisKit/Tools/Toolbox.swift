@@ -66,14 +66,14 @@ public struct Toolbox {
     private static let scheduling = #"\b(timers?|countdown|alarm|remind(er)?s?|remind me|wake me|calendar|schedule|appointment|event)\b"#
     private static let timerRequest = #"\b(set|start|make)\b.*\b(timer|alarm)\b|\b(remind|wake) me\b"#
 
-    /// The tools a local brain gets: timers, the calendar's reading tool, the Mac tools (apps, window dock, Quick Dock)
-    /// and the calculator, whatever the wording, so the model decides what a request needs and no word list has to.
-    /// Nothing that adds, changes or deletes, and no Notion: those go to the cloud brain.
+    /// The tools a local brain gets, whatever the wording, so the model decides what a request needs and no word list
+    /// has to: only jobs it gets right at least 9 times in 10 (on the eval, both seeds). Timers, opening apps, Quick
+    /// Dock and the calculator. The calendar (it read today's events wrong) and the window dock (it mixed up dock and
+    /// undock, and which app) go to the cloud brain, as do Notion and anything that adds, changes or deletes.
     public func localKits(for text: String, needs: CloudNeeds) -> [ToolKit] {
         var kits: [ToolKit] = []
         if let timers { kits.append(TimerTools(center: timers)) }
-        if let calendar { kits.append(ReadOnlyKit(CalendarTools(source: calendar), allowed: ["list"])) }
-        if let mac { kits.append(MacTools(controls: mac)) }
+        if let mac { kits.append(ReadOnlyKit(MacTools(controls: mac), allowed: ["open_app", "quick_dock"])) }
         kits.append(MathTools())
         return kits
     }
@@ -116,7 +116,7 @@ public struct Toolbox {
             return "I couldn't tell when. Try \"add dentist to my calendar tomorrow at 3pm\"."
         }
         if timers != nil, text.range(of: Self.timerRequest, options: [.regularExpression, .caseInsensitive]) != nil {
-            return "I couldn't tell when. Try \"timer 10 minutes\", \"remind me in 20 minutes\" or \"remind me at 7 pm to call mom\"."
+            return "I couldn't tell how long. Try \"timer 10 minutes\"."
         }
         return nil
     }

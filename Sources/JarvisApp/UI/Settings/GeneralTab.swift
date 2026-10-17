@@ -39,8 +39,10 @@ struct GeneralTab: View {
                 if state.settings.holdWindows && !AccessibilityAccess.isTrusted {
                     Button("Allow Accessibility…", action: AccessibilityAccess.request)
                 }
-                if !CGPreflightScreenCaptureAccess() {
-                    Button("Allow Screen Recording for live previews…") { _ = CGRequestScreenCaptureAccess() }
+                Toggle("Window previews on the side cards", isOn: state.binding(\.windowPreviews))
+                    .help("A live picture of each held window; off, its app's icon and title")
+                if state.settings.windowPreviews && !CGPreflightScreenCaptureAccess() {
+                    Button("Allow Screen Recording for the previews…") { _ = CGRequestScreenCaptureAccess() }
                 }
             } header: {
                 Text("Windows")

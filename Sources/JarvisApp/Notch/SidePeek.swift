@@ -33,7 +33,7 @@ final class SidePeek {
     init(state: AppState) {
         self.state = state
         panel.level = .mainMenu + 2
-        panel.alphaValue = 0
+        // Shown and hidden by the cards' own opacity (`SidePeekModel`), never the window's.
         panel.contentView = NSHostingView(rootView: SidePeekView(model: model, skin: { state.skin },
                                                                  pick: { [weak self] id in self?.onPick(id) },
                                                                  drag: { [weak self] id in self?.onDrag(id) },
@@ -53,26 +53,30 @@ final class SidePeek {
         model.cards = items.map { item in
             let app = NSRunningApplication(processIdentifier: item.window.pid)
             return SidePeekModel.Card(id: item.id, icon: app?.icon, name: app?.localizedName ?? "App",
-                                      title: Self.title(of: item.window), image: model.images[item.id])
+                                      title: Self.title(of: item.window),
+                                      image: state.settings.windowPreviews ? model.images[item.id] : nil)
         }
         model.highlighted = nil
         model.placeholder = placeholder
         let outer = area.insetBy(dx: -Self.margin, dy: -Self.margin)
         panel.ignoresMouseEvents = false
-        guard animated else {
-            panel.setFrame(outer, display: true)
-            panel.alphaValue = 1
-            panel.orderFrontRegardless()
-            return
-        }
-        let start = outer.offsetBy(dx: hidden[0].minX - first.minX, dy: 0)
-        panel.setFrame(start, display: true)
+        // The window goes straight where the cards end up and the cards slide inside it. Sliding the window itself
+        // made AppKit set the cursor again every frame, and a customized pointer (Accessibility's size or colour) is
+        // redrawn on the CPU each time, on the main thread: the cards stuttered.
+        panel.setFrame(outer, display: true)
         panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().setFrame(outer, display: true)
-            panel.animator().alphaValue = 1
+        var instant = Transaction(animation: nil)
+        instant.disablesAnimations = true
+        guard animated else {
+            return withTransaction(instant) {
+                model.slide = 0
+                model.opacity = 1
+            }
+        }
+        withTransaction(instant) { model.slide = hidden[0].minX - first.minX }
+        withAnimation(.easeOut(duration: 0.22)) {
+            model.slide = 0
+            model.opacity = 1
         }
         capturing = items
         capture()
@@ -89,10 +93,7 @@ final class SidePeek {
         frames = []
         area = .zero
         panel.ignoresMouseEvents = true
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            panel.animator().alphaValue = 0
-        }
+        withAnimation(.easeIn(duration: 0.15)) { model.opacity = 0 }
     }
 
     /// The card under a point on screen.
@@ -120,7 +121,7 @@ final class SidePeek {
 
     /// Live pictures of the windows, with Screen Recording allowed (never asked for here: Settings has the button).
     private func capture() {
-        guard CGPreflightScreenCaptureAccess() else { return }
+        guard state.settings.windowPreviews, CGPreflightScreenCaptureAccess() else { return }
         let ids = capturing.compactMap { item in Desktops.windowID(of: item.window.element).map { (item.id, $0) } }
         let height = model.cardHeight
         Task { [weak self] in
@@ -164,6 +165,9 @@ final class SidePeekModel {
     /// The dragged card's slot, drawn empty.
     var placeholder: UUID?
     var cardHeight: CGFloat = SideDock.cardHeight
+    /// How far the cards are from where they show (sliding out of the edge), and how visible they are.
+    var slide: CGFloat = 0
+    var opacity: Double = 0
     /// The last picture of each window, so cards show it straight away next time.
     @ObservationIgnored var images: [UUID: CGImage] = [:]
 
@@ -219,6 +223,8 @@ private struct SidePeekView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .offset(x: model.slide)
+        .opacity(model.opacity)
     }
 }
 

@@ -27,14 +27,26 @@ struct TrayView: View {
     /// Moving to another display: the tab beside a hardware notch is in behind it (`NotchHop`).
     @Environment(\.tabsTucked) private var tucked
 
+    /// The stage drawn. It follows the model's, in two steps where the shape changes (`follow`).
+    @State private var shown: TrayStage = .hidden
+    /// The open grid folded up to nothing behind the hardware notch, on its way to or from the side tab.
+    @State private var folded = false
+    /// Counts `follow`'s changes, so a step left over from an earlier one is dropped.
+    @State private var steps = 0
+
     /// What shows: resting beside a hardware notch, it's tucked in behind it while the notch moves display.
     private var stage: TrayStage {
-        tucked && model.stage == .dot && model.layout.isBeside(.dot) ? .hidden : model.stage
+        tucked && shown == .dot && model.layout.isBeside(.dot) ? .hidden : shown
+    }
+
+    private var frame: CGRect {
+        let open = model.layout.frame(for: .open)
+        return folded ? CGRect(x: open.minX, y: open.maxY, width: open.width, height: 0) : model.layout.frame(for: stage)
     }
 
     var body: some View {
         let layout = model.layout
-        let frame = layout.frame(for: stage)
+        let frame = frame
         // The window's top-left corner on screen (see `ScreenTrays.panelFrame`).
         let origin = CGPoint(x: layout.bounds.minX - ScreenTrays.glowRoom, y: layout.bounds.maxY)
         let skin = state.skin
@@ -48,9 +60,45 @@ struct TrayView: View {
             .scaleEffect(model.catching ? 1.05 : 1, anchor: .top)
             .offset(x: frame.minX - origin.x, y: origin.y - frame.maxY)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .animation(.spring(duration: 0.4, bounce: 0.25), value: stage)
+            .animation(Self.spring, value: tucked)
             .animation(.spring(duration: 0.25), value: model.catching)
             .animation(.spring(duration: 0.35, bounce: 0.3), value: model.apps)
+            .onChange(of: model.stage, initial: true) { _, new in follow(new) }
+    }
+
+    private static let spring = Animation.spring(duration: 0.4, bounce: 0.25)
+
+    /// Goes to `new`. Beside a hardware notch the grid hangs below it and the dot's tab sits on its right, so one
+    /// goes in before the other comes out: the grid folds up behind the notch, then the tab springs out; the tab
+    /// slides in, then the grid drops. Morphed in one go, the two shapes slid across each other.
+    private func follow(_ new: TrayStage) {
+        steps += 1
+        let step = steps
+        let layout = model.layout
+        guard layout.hardwareNotch != nil, layout.isBeside(shown) != layout.isBeside(new) else {
+            return withAnimation(Self.spring) { shown = new }
+        }
+        var instant = Transaction(animation: nil)
+        instant.disablesAnimations = true
+        if shown == .open {
+            withAnimation(.easeIn(duration: 0.16)) { folded = true } completion: {
+                guard step == steps else { return }
+                withTransaction(instant) {
+                    folded = false
+                    shown = .hidden
+                }
+                if new != .hidden { withAnimation(Self.spring) { shown = new } }
+            }
+        } else {
+            withAnimation(.easeIn(duration: 0.14)) { shown = .hidden } completion: {
+                guard step == steps else { return }
+                withTransaction(instant) {
+                    shown = .open
+                    folded = true
+                }
+                withAnimation(Self.spring) { folded = false }
+            }
+        }
     }
 
     @ViewBuilder
@@ -62,18 +110,19 @@ struct TrayView: View {
                 if stage == .dot {
                     dot
                         .frame(width: TrayLayout.besideOut - DockTabShape.flare)
-                        .padding(.trailing, DockTabShape.flare)
+                        // A point in from the middle of what shows, which looked too far right.
+                        .padding(.trailing, DockTabShape.flare + 1)
                         .transition(.opacity)
                 }
             }
         } else {
-            let radius: CGFloat = model.stage == .open ? 16 : 9
+            let radius: CGFloat = stage == .open ? 16 : 9
             ZStack(alignment: .top) {
                 surface(NotchShape(radius: radius, shoulder: 6), border: NotchShape(radius: radius, shoulder: 6, openTop: true),
                         skin: skin)
-                if model.stage == .open {
+                if stage == .open {
                     grid(skin: skin).transition(.opacity)
-                } else if model.stage == .dot {
+                } else if stage == .dot {
                     dot.frame(height: model.layout.menuBarHeight).transition(.opacity)
                 }
             }
@@ -88,17 +137,18 @@ struct TrayView: View {
     private func surface<S: Shape, B: Shape>(_ shape: S, border: B, skin: Skin) -> some View {
         if skin.material == .glass {
             Color.clear.glass(tint: skin.background.opacity(skin.glassDarkness), in: shape)
-                .overlay { inside(border, width: 0.8).stroke(skin.foreground.opacity(0.34), lineWidth: 0.8) }
+                .overlay { inside(border, of: shape, color: skin.foreground.opacity(0.34), width: 0.8) }
         } else {
             shape.fill(skin.background.opacity(skin.backgroundOpacity))
-                .overlay { if let line = skin.border { inside(border, width: skin.borderWidth).stroke(line, lineWidth: skin.borderWidth) } }
+                .overlay { if let line = skin.border { inside(border, of: shape, color: line, width: skin.borderWidth) } }
         }
     }
 
-    /// The border's path moved in by half its width (sides and bottom), so all of the line is inside the tray: a
-    /// line centred on the edge lost its outer half to the clip, or showed below a hardware notch.
-    private func inside<B: Shape>(_ border: B, width: CGFloat) -> some Shape {
-        InsetBorder(border: border, by: width / 2)
+    /// The border all inside the tray, its outer edge on the fill's: stroked twice as wide and clipped to the
+    /// shape. Centred on the edge it lost its outer half to the clip (or showed below a hardware notch); moved in by
+    /// half its width, its corners came off the fill's, which showed outside it.
+    private func inside<B: Shape, S: Shape>(_ border: B, of shape: S, color: Color, width: CGFloat) -> some View {
+        border.stroke(color, lineWidth: 2 * width).clipShape(shape)
     }
 
     /// Three columns, two rows: the held windows' icons, then the places left. A window being dragged over it
@@ -143,15 +193,5 @@ struct TrayView: View {
             .onTapGesture { dock.restore(app) }
             .contextMenu { Button("Let Go") { dock.letGo(app) } }
             .gesture(DragGesture(minimumDistance: 3).onChanged { _ in dock.pullOut(app, icon: icon) })
-    }
-}
-
-/// A border shape drawn half its line width in from the sides and bottom (the top is left: it's the screen's edge).
-private struct InsetBorder<B: Shape>: Shape {
-    let border: B
-    let by: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        border.path(in: CGRect(x: rect.minX + by, y: rect.minY, width: rect.width - 2 * by, height: rect.height - by))
     }
 }

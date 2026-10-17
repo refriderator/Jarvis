@@ -49,6 +49,12 @@ final class SideDockController {
     private var hovered: UUID?
     /// The window popped out, the app that was in front, and whether the pointer has been on it yet.
     private var popped: (id: UUID, frame: CGRect, previous: NSRunningApplication?, entered: Bool)?
+    /// Popped by picking it in Mission Control: where the pointer was then. Moving away from there (not onto the
+    /// window) sends it back, like a peek; it was never under the pointer, so it otherwise stayed out for good.
+    private var poppedFrom: CGPoint?
+    /// Mission Control is showing, or when it last closed: a window picked there comes forward just after.
+    private var missionControlShowing = false
+    private var missionControlClosedAt: Date?
     private var leftAt: Date?
     /// When another app came forward without you picking it: the popped window closed or an app quit (macOS
     /// picks one), or it went back to the side and the app before it got the keyboard back. That app's held window
@@ -257,8 +263,12 @@ final class SideDockController {
         }
         if current.frame.insetBy(dx: -SideDock.leaveMargin, dy: -SideDock.leaveMargin).contains(pointer) {
             popped?.entered = true
+            poppedFrom = nil
             leftAt = nil
             return
+        }
+        if let from = poppedFrom, NSEvent.pressedMouseButtons == 0, hypot(pointer.x - from.x, pointer.y - from.y) > 8 {
+            return retract(giveBackFocus: true)
         }
         guard current.entered, NSEvent.pressedMouseButtons == 0 else { return }
         // A moment's grace, so brushing past its edge doesn't send it back.
@@ -429,6 +439,7 @@ final class SideDockController {
 
     /// Pops a held window out over the one in front, in front and focused.
     func pop(_ id: UUID) {
+        poppedFrom = nil
         guard let item = parked.first(where: { $0.id == id }),
               let screen = NSScreen.screens.first(where: { $0.displayID == item.display }) else { return }
         if popped != nil, popped?.id != id { retract(giveBackFocus: false) }
@@ -454,6 +465,7 @@ final class SideDockController {
     /// Sends the popped window back to its side; with `giveBackFocus`, the app that was in front gets the
     /// keyboard back.
     private func retract(giveBackFocus: Bool) {
+        poppedFrom = nil
         guard let current = popped, let item = parked.first(where: { $0.id == current.id }) else {
             popped = nil
             return
@@ -497,8 +509,17 @@ final class SideDockController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self, !notPicked, let front = windows.frontWindow(pid: pid),
                   let item = parked.first(where: { $0.window == front }), popped?.id != item.id else { return }
+            let fromMissionControl = missionControlShowing
+                || missionControlClosedAt.map { Date().timeIntervalSince($0) < 1.5 } ?? false
             pop(item.id)
+            if fromMissionControl, popped?.entered == false { poppedFrom = NSEvent.mouseLocation }
         }
+    }
+
+    /// Mission Control opened or closed (`MissionControlWatch`, through `NotchController`).
+    func missionControl(showing: Bool) {
+        missionControlShowing = showing
+        if !showing { missionControlClosedAt = Date() }
     }
 
     private func poppedGone() {
