@@ -24,6 +24,10 @@ final class DockController {
 
     /// A file is being dragged out of the Finder tab, and where the pointer is; set by `NotchController`.
     @ObservationIgnored var onFileDrag: (CGPoint?) -> Void = { _ in }
+    /// Whether a point is over another display's tray (lighting it up; nil clears it); set by `ScreenTrays`.
+    @ObservationIgnored var overTray: (CGPoint?) -> Bool = { _ in false }
+    /// The dragged window is over another display's tray.
+    @ObservationIgnored private var overTrayNow = false
     /// Turns the drop box's frame in the panel into screen coordinates; set by `NotchController`.
     @ObservationIgnored var boxToScreen: (CGRect) -> CGRect = { $0 }
     /// Where the drop box is, in screen coordinates (nil while it isn't on screen).
@@ -153,13 +157,17 @@ final class DockController {
             ticks += 1
             guard ticks < 120 else { return stopTracking() }
             guard let frame = windows.frame(of: pressed.window), frame.origin != pressed.origin else { return }
-            // A fifth app has nowhere to go, so it's not offered a box.
-            guard kind == .folder || !state.dock.isFull else { return stopTracking() }
+            // A seventh window on its desktop has nowhere to go, so it's not offered a box. Its own desktop: with
+            // more than one display, that isn't always the notch's.
+            let desktop = Desktops.of(pressed.window.element).first ?? state.dock.desktop
+            guard kind == .folder || state.dock.apps(on: desktop).count < NotchDock.maxApps else { return stopTracking() }
             movingWindow = true
             log.debug("drag: window of pid \(pressed.window.pid) is moving")
             draggedIcon = NSRunningApplication(processIdentifier: pressed.window.pid)?.icon
         }
         let pointer = NSEvent.mouseLocation
+        // Another display's tray takes apps (a Finder window's folder only goes to the notch's Finder tab).
+        overTrayNow = kind == .app && overTray(pointer)
         // At the notch the dropdown opens with the box; well away from the whole dropdown it closes again.
         if opener.update(pointer: pointer, catchIn: state.layout.notch, releaseOutside: state.layout.frame(for: .open)) {
             log.debug("drag: dropdown \(self.opener.caught ? "opens" : "closes")")
@@ -181,9 +189,9 @@ final class DockController {
 
     /// The button came up after a window drag: take it if it was let go on the box.
     private func finishDrag() {
-        let window = movingWindow && catcher.caught ? pressed?.window : nil
+        let window = movingWindow && (catcher.caught || overTrayNow) ? pressed?.window : nil
         let opened = opener.caught
-        let edge = movingWindow && !catcher.caught ? pressed?.window : nil
+        let edge = movingWindow && !catcher.caught && !overTrayNow ? pressed?.window : nil
         stopTracking()
         if let edge { dropAtEdge(edge) }
         state.updateDock { $0.dragging = nil; $0.catching = false }
@@ -218,6 +226,8 @@ final class DockController {
         pressed = nil
         movingWindow = false
         draggedIcon = nil
+        overTrayNow = false
+        _ = overTray(nil)
     }
 
     private func kind(of window: ForeignWindow) -> DockCatchKind {

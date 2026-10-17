@@ -2,26 +2,42 @@ import AppKit
 import JarvisKit
 import SwiftUI
 
-/// Displays without the notch get their own strip: a small tab hanging from the middle of the menu bar with the
-/// icons of the windows set aside on the desktop that display is showing. It works like the notch's tab: click
-/// an icon to bring its window back filling the desktop, drag it out to carry the window. Only there while it
-/// holds something.
+/// Displays other than the notch's get a tray of their own for the windows held on the desktop they're showing,
+/// 6 per desktop like the notch (`TrayLayout` has the shapes). Holding nothing, there's no tray; holding windows,
+/// a small notch with a white dot; hovered, or a window dragged by its title bar to the top middle, it opens to a
+/// 2 × 3 grid. Let go there and the window is held on that display (`DockController` asks `catches`). Click an icon
+/// to bring its window back filling the desktop, drag it out to carry the window.
 @MainActor
 final class ScreenTrays {
     private let state: AppState
     private let dock: DockController
     private var trays: [CGDirectDisplayID: Tray] = [:]
     private var observers: [NSObjectProtocol] = []
+    /// Follows the pointer while a tray is up, to open it on hover and close it after.
+    private var hoverTimer: Timer?
 
-    private struct Tray {
-        let panel: NotchPanel
+    @MainActor
+    private final class Tray {
+        let panel = NotchPanel()
         let model: TrayModel
         let screen: NSScreen
+        /// A dragged window's title bar is at this display's top middle.
+        var dragNear = false
+        var hovering = false
+
+        init(model: TrayModel, screen: NSScreen) {
+            self.model = model
+            self.screen = screen
+        }
     }
+
+    /// Room in the panel around the tray for the skin's glow.
+    static let glowRoom: CGFloat = 16
 
     init(state: AppState, dock: DockController) {
         self.state = state
         self.dock = dock
+        dock.overTray = { [weak self] pointer in self?.catches(pointer) ?? false }
         rebuild()
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -35,7 +51,6 @@ final class ScreenTrays {
     private func observeApps() {
         withObservationTracking {
             _ = state.dock.apps
-            _ = state.skin.id
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.refresh()
@@ -44,82 +59,102 @@ final class ScreenTrays {
         }
     }
 
-    /// One strip per display other than the notch's (after a display is plugged in, or the notch moves).
+    /// One tray per display other than the notch's (after a display is plugged in, or the notch moves).
     func rebuild() {
         trays.values.forEach { $0.panel.orderOut(nil) }
         trays = [:]
         let notched = state.notchScreen
         for screen in NSScreen.screens where screen != notched {
             guard let id = screen.displayID else { continue }
-            let model = TrayModel()
-            let panel = NotchPanel()
-            panel.ignoresMouseEvents = false
-            panel.contentView = NSHostingView(rootView: TrayView(model: model, state: state, dock: dock))
-            trays[id] = Tray(panel: panel, model: model, screen: screen)
+            let hardware = screen.safeAreaInsets.top > 0 ? screen.notchLayout.notch : nil
+            let layout = TrayLayout(screen: screen.frame, menuBarHeight: screen.frame.maxY - screen.visibleFrame.maxY,
+                                    hardwareNotch: hardware)
+            let tray = Tray(model: TrayModel(layout: layout), screen: screen)
+            tray.panel.ignoresMouseEvents = false
+            tray.panel.contentView = NSHostingView(rootView: TrayView(model: tray.model, state: state, dock: dock))
+            trays[id] = tray
         }
         refresh()
     }
 
-    /// Each tray shows its display's desktop's held apps, sized to them, and hides when there are none.
+    /// A window dragged by its title bar is at `pointer` (nil: the drag ended). Opens the tray of the display
+    /// whose top middle it's at; true when letting go now would hold it there.
+    func catches(_ pointer: CGPoint?) -> Bool {
+        var caught = false
+        for tray in trays.values {
+            let layout = tray.model.layout
+            // Once open it stays open over the whole drop area, which reaches lower than where it opened.
+            let near = pointer.map { layout.approachZone.contains($0) || tray.dragNear && layout.dropZone.contains($0) } ?? false
+            let over = near && pointer.map(layout.dropZone.contains) == true
+            tray.dragNear = near
+            if tray.model.catching != over { tray.model.catching = over }
+            caught = caught || over
+        }
+        refresh()
+        return caught
+    }
+
+    /// Each tray's held apps (its display's desktop's) and how much of it shows.
     private func refresh() {
         for (id, tray) in trays {
             let desktop = Desktops.active(on: id)
             let apps = state.dock.apps.filter { $0.desktop != nil && $0.desktop == desktop }
-            tray.model.apps = apps
-            guard !apps.isEmpty else {
-                tray.panel.orderOut(nil)
-                continue
+            if tray.model.apps != apps { tray.model.apps = apps }
+            let stage: TrayStage = tray.dragNear ? .open : apps.isEmpty ? .hidden : tray.hovering ? .open : .dot
+            show(stage, tray)
+        }
+        let up = trays.values.contains { $0.model.stage != .hidden }
+        if up, hoverTimer == nil {
+            hoverTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.trackHover() }
             }
-            let frame = tray.screen.frame
-            let menuBar = frame.maxY - tray.screen.visibleFrame.maxY
-            let height = menuBar > 4 ? menuBar : 24
-            tray.model.height = height
-            let width = TrayView.width(for: apps.count)
-            tray.panel.setFrame(CGRect(x: frame.midX - width / 2, y: frame.maxY - height, width: width, height: height),
-                                display: true)
-            tray.panel.orderFrontRegardless()
+        } else if !up {
+            hoverTimer?.invalidate()
+            hoverTimer = nil
         }
     }
-}
 
-@MainActor
-@Observable
-final class TrayModel {
-    var apps: [HeldApp] = []
-    var height: CGFloat = 24
-}
-
-/// The tray: flat along the top of the screen, rounded below, in the skin's colours, icons in a row.
-private struct TrayView: View {
-    let model: TrayModel
-    let state: AppState
-    let dock: DockController
-
-    static let slot: CGFloat = 26
-
-    static func width(for count: Int) -> CGFloat { 12 + CGFloat(count) * slot }
-
-    var body: some View {
-        let skin = state.skin
-        let shape = UnevenRoundedRectangle(bottomLeadingRadius: 9, bottomTrailingRadius: 9)
-        HStack(spacing: 0) {
-            ForEach(model.apps) { app in
-                let icon = NSRunningApplication(processIdentifier: app.pid)?.icon ?? NSImage()
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 18, height: 18)
-                    .frame(width: Self.slot, height: model.height)
-                    .contentShape(Rectangle())
-                    .help("\(app.appName): click to open it full desktop, drag it out to hold it, right-click to let go of it")
-                    .onTapGesture { dock.restore(app) }
-                    .contextMenu { Button("Let Go") { dock.letGo(app) } }
-                    .gesture(DragGesture(minimumDistance: 3).onChanged { _ in dock.pullOut(app, icon: icon) })
+    /// Opens on the pointer coming onto the tray (or the hardware notch it hides behind), closes once it's well off.
+    private func trackHover() {
+        let pointer = NSEvent.mouseLocation
+        var changed = false
+        for tray in trays.values {
+            let layout = tray.model.layout
+            let zone = tray.hovering ? layout.frame(for: .open).insetBy(dx: -12, dy: -12)
+                                     : layout.frame(for: max(tray.model.stage, .dot)).insetBy(dx: -2, dy: -2)
+            let hovering = !tray.model.apps.isEmpty && zone.contains(pointer)
+            if hovering != tray.hovering {
+                tray.hovering = hovering
+                changed = true
             }
         }
-        .padding(.horizontal, 6)
-        .frame(width: Self.width(for: model.apps.count), height: model.height)
-        .background(skin.background.opacity(skin.material == .glass ? 0.85 : skin.backgroundOpacity), in: shape)
-        .overlay { if let border = skin.border { shape.strokeBorder(border, lineWidth: 1) } }
-        .animation(.spring(duration: 0.35, bounce: 0.3), value: model.apps)
+        if changed { refresh() }
+    }
+
+    /// Grows the panel before the tray animates bigger, and shrinks it (or hides it) once it has animated smaller,
+    /// so it never covers more of the menu bar and title bars than the tray does.
+    private func show(_ stage: TrayStage, _ tray: Tray) {
+        let old = tray.model.stage
+        guard stage != old else { return }
+        if stage > old {
+            tray.panel.setFrame(panelFrame(stage, tray), display: true)
+            tray.panel.orderFrontRegardless()
+        }
+        tray.model.stage = stage
+        guard stage < old else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, tray.model.stage == stage else { return }
+            if stage == .hidden {
+                tray.panel.orderOut(nil)
+            } else {
+                tray.panel.setFrame(panelFrame(stage, tray), display: true)
+            }
+        }
+    }
+
+    private func panelFrame(_ stage: TrayStage, _ tray: Tray) -> CGRect {
+        let frame = tray.model.layout.frame(for: max(stage, .dot))
+        let room = Self.glowRoom
+        return CGRect(x: frame.minX - room, y: frame.minY - room, width: frame.width + 2 * room, height: frame.height + room)
     }
 }

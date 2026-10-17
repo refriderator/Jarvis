@@ -48,11 +48,37 @@ public enum SideDock {
         return free.contains(nearer) ? nearer : free.first
     }
 
-    /// A window of `frame` slid off `side` of `screen`, kept at its size and height (inside `visible`, the screen
-    /// minus menu bar and Dock), with `sliver` showing.
-    public static func parked(_ frame: CGRect, side: ScreenSide, screen: CGRect, visible: CGRect) -> CGRect {
-        let x = side == .left ? screen.minX - frame.width + sliver : screen.maxX - sliver
-        return CGRect(x: x, y: clampedY(frame, in: visible), width: frame.width, height: frame.height)
+    /// A window of `frame` slid off `side` of `screen`, kept at its height (inside `visible`, the screen minus menu
+    /// bar and Dock), with `sliver` showing. macOS gives a window that's off every display to the display nearest
+    /// it, and that display's desktop, so a wide window parked beside a corner of another display (`others`) would
+    /// end up held by neither; it's made narrower until its middle is nearer `screen`.
+    public static func parked(_ frame: CGRect, side: ScreenSide, screen: CGRect, visible: CGRect,
+                              others: [CGRect] = []) -> CGRect {
+        var width = frame.width
+        while width > minParkedWidth, nearest(to: placed(width), among: others + [screen]) != screen {
+            width = max(minParkedWidth, width - 40)
+        }
+        return placed(width)
+
+        func placed(_ width: CGFloat) -> CGRect {
+            let x = side == .left ? screen.minX - width + sliver : screen.maxX - sliver
+            return CGRect(x: x, y: clampedY(frame, in: visible), width: width, height: frame.height)
+        }
+    }
+
+    /// Narrower than this, a parked window is left as is (apps have their own minimum anyway).
+    static let minParkedWidth: CGFloat = 200
+
+    /// The display whose edge is closest to `frame`'s middle.
+    public static func nearest(to frame: CGRect, among screens: [CGRect]) -> CGRect? {
+        let middle = CGPoint(x: frame.midX, y: frame.midY)
+        return screens.min { distance(middle, $0) < distance(middle, $1) }
+    }
+
+    private static func distance(_ point: CGPoint, _ rect: CGRect) -> CGFloat {
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        return (dx * dx + dy * dy).squareRoot()
     }
 
     /// A held window clicked with Quick Dock off: popped out of `side`, over the window in front, `popInset`

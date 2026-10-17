@@ -109,4 +109,48 @@ struct SideDockTests {
         #expect(fixed.size == got.size)
         #expect(visible.contains(fixed))
     }
+
+    @Test func wideWindowsStayWithTheirDisplay() {
+        // A laptop below and left of the main display: a wide window off the main one's left edge would sit nearer
+        // the laptop, and macOS would give it the laptop's desktop.
+        let main = CGRect(x: 0, y: 0, width: 2080, height: 1170)
+        let laptop = CGRect(x: -1049, y: -828, width: 1280, height: 828)
+        let mainVisible = CGRect(x: 0, y: 0, width: 2080, height: 1140)
+        let wide = SideDock.parked(CGRect(x: 100, y: 0, width: 1769, height: 1140), side: .left, screen: main,
+                                   visible: mainVisible, others: [laptop])
+        #expect(wide.width < 1769)
+        #expect(wide.maxX == main.minX + SideDock.sliver)
+        #expect(SideDock.nearest(to: wide, among: [main, laptop]) == main)
+        // Nothing near: it keeps its width.
+        let alone = SideDock.parked(CGRect(x: 100, y: 0, width: 1769, height: 1140), side: .left, screen: main,
+                                    visible: mainVisible)
+        #expect(alone.width == 1769)
+    }
+}
+
+struct TrayLayoutTests {
+    let screen = CGRect(x: 0, y: 0, width: 2080, height: 1170)
+
+    @Test func withoutANotchItHangsFromTheMiddleAndOpensDown() {
+        let layout = TrayLayout(screen: screen, menuBarHeight: 30)
+        let dot = layout.frame(for: .dot), open = layout.frame(for: .open)
+        #expect(dot.midX == screen.midX && dot.maxY == screen.maxY && dot.height == 30)
+        #expect(open.midX == screen.midX && open.maxY == screen.maxY)
+        #expect(open.width > dot.width * 2 && open.height > dot.height * 3)
+        #expect(layout.frame(for: .hidden).height == 0)
+        #expect(layout.approachZone.contains(CGPoint(x: screen.midX + 200, y: screen.maxY - 20)))
+        #expect(layout.dropZone.contains(open))
+    }
+
+    @Test func besideAHardwareNotchItSlidesOutSideways() {
+        let notch = CGRect(x: 1000, y: 1138, width: 180, height: 32)
+        let layout = TrayLayout(screen: screen, menuBarHeight: 32, hardwareNotch: notch)
+        #expect(layout.frame(for: .hidden) == notch)
+        for stage in [TrayStage.dot, .open] {
+            let frame = layout.frame(for: stage)
+            #expect(frame.minX == notch.minX && frame.minY == notch.minY && frame.height == notch.height)
+            #expect(frame.maxX > notch.maxX)
+        }
+        #expect(layout.frame(for: .open).width > layout.frame(for: .dot).width)
+    }
 }

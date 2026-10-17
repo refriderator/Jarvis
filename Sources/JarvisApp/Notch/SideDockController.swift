@@ -129,7 +129,7 @@ final class SideDockController {
             unpark(oldest.window)
             windows.setMinimized(true, oldest.window)
         }
-        let target = SideDock.parked(frame, side: side, screen: screen.frame, visible: screen.visibleFrame)
+        let target = SideDock.parked(frame, side: side, screen: screen.frame, visible: screen.visibleFrame, others: Self.otherScreens(screen))
         let got = windows.setFrame(target, of: window) ?? target
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "?"
         log.debug("park: \(name, privacy: .public) on the \(side.rawValue, privacy: .public), got x \(got.minX) for \(target.minX)")
@@ -382,11 +382,13 @@ final class SideDockController {
             if popped?.id == id { popped = nil }
             let size = windows.frame(of: item.window)?.size ?? item.original.size
             let target = SideDock.parked(CGRect(origin: item.parkedAt.origin, size: size), side: dropAt.side,
-                                         screen: screen.frame, visible: screen.visibleFrame)
+                                         screen: screen.frame, visible: screen.visibleFrame, others: Self.otherScreens(screen))
+            // The desktop it's going to, read first: a window off the edge can count as another display's after.
+            item.desktop = item.display == screen.displayID ? Desktops.of(item.window.element).first : nil
+            item.desktop = item.desktop ?? Desktops.active(on: screen.displayID)
             item.parkedAt = windows.setFrame(target, of: item.window) ?? target
             item.side = dropAt.side
             item.display = screen.displayID
-            item.desktop = Desktops.of(item.window.element).first ?? Desktops.active(on: screen.displayID)
             log.debug("drag: to the \(dropAt.side.rawValue, privacy: .public), got x \(item.parkedAt.minX)")
         }
         // In `parked`, before the card it was dropped above on that side (or after the side's last one).
@@ -456,7 +458,7 @@ final class SideDockController {
            let screen = NSScreen.screens.first(where: { $0.displayID == item.display }),
            let index = parked.firstIndex(where: { $0.id == item.id }) {
             target = SideDock.parked(CGRect(origin: item.parkedAt.origin, size: size), side: item.side,
-                                     screen: screen.frame, visible: screen.visibleFrame)
+                                     screen: screen.frame, visible: screen.visibleFrame, others: Self.otherScreens(screen))
             parked[index].popSize = size
             parked[index].parkedAt = target
         }
@@ -540,6 +542,10 @@ final class SideDockController {
         guard !gone.isEmpty else { return }
         if let id = popped?.id, gone.contains(where: { $0.id == id }) { poppedGone() }
         parked.removeAll { item in gone.contains { $0.id == item.id } }
+    }
+
+    private static func otherScreens(_ screen: NSScreen) -> [CGRect] {
+        NSScreen.screens.filter { $0 != screen }.map(\.frame)
     }
 
     private static func screen(for frame: CGRect) -> NSScreen? {
