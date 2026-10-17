@@ -236,8 +236,16 @@ final class SideDockController {
     }
 
     private func trackCards(_ pointer: CGPoint, showing: (display: CGDirectDisplayID?, side: ScreenSide)) {
-        // Well away from the cards (and the edge they came from): they slide back.
-        guard peek.area.insetBy(dx: -40, dy: -40).contains(pointer) else { return hideCards() }
+        // Well away from the cards: they slide back. Anywhere in their column, from the edge to just past them, top
+        // to bottom, they stay: only the 3 pt edge itself kept them above or below the cards, so the pointer
+        // wobbling off it hid them and the next touch slid them straight back out, and they stuttered.
+        let column = NSScreen.screens.first(where: { $0.displayID == showing.display }).map { screen in
+            let visible = screen.visibleFrame
+            let near = showing.side == .left ? screen.frame.minX : peek.area.minX - 40
+            let far = showing.side == .left ? peek.area.maxX + 40 : screen.frame.maxX
+            return CGRect(x: near, y: visible.minY, width: far - near, height: visible.height)
+        } ?? .zero
+        guard column.contains(pointer) || peek.area.insetBy(dx: -40, dy: -40).contains(pointer) else { return hideCards() }
         hovered = peek.card(at: pointer)?.id
         peek.highlight(hovered)
     }
