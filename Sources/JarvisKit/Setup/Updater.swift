@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 /// Updates Jarvis from inside Settings: pulls the folder it was built from and runs the installer again.
@@ -16,17 +15,10 @@ public enum Updater {
     @MainActor
     public static func openUpdate() throws {
         guard let folder = sourceFolder else { throw ChatError("Can't find the folder Jarvis was installed from.") }
-        let quoted = "'" + folder.path.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
-        let script = """
-            #!/bin/sh
-            clear
+        try TerminalWindow.run("""
             echo "Updating Jarvis. Jarvis will quit and open again when it's done."
             echo
-            cd \(quoted) && git pull && sh "Install Jarvis.command"
-            """
-        let url = URL.temporaryDirectory.appending(path: "Update Jarvis.command")
-        try script.write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
-        NSWorkspace.shared.open(url)
+            cd \(TerminalWindow.quoted(folder.path)) && git pull && sh "Install Jarvis.command"
+            """, named: "Update Jarvis")
     }
 }

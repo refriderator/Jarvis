@@ -15,6 +15,8 @@ cp Support/Info.plist "$APP/Contents/Info.plist"
 # The icon (redraw it with scripts/make-icon.sh).
 mkdir -p "$APP/Contents/Resources"
 cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Settings › General › Uninstall runs it from here, so it works without the source folder.
+cp scripts/uninstall.sh "$APP/Contents/Resources/uninstall.sh"
 # llama.cpp ships as a prebuilt framework; it must sit inside the app for the built-in model.
 mkdir -p "$APP/Contents/Frameworks"
 cp -R "$(find .build/artifacts -type d -path '*macos-arm64_x86_64/llama.framework' | head -1)" "$APP/Contents/Frameworks/"

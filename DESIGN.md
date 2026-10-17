@@ -101,6 +101,12 @@ Settings are one `Settings` struct saved to a file; the window is a form over it
 - **Update** (General, `Updater`): opens Terminal to `git pull` and run the installer in the folder this copy was built
   from (`bundle.sh` writes it into Info.plist as `JarvisSourceFolder`). Terminal, not the background, because the
   installer quits Jarvis, and so errors and Apple's license prompt can be seen and answered.
+- **Uninstall** (General, `Uninstaller`): `scripts/uninstall.sh`, copied into the app by `bundle.sh` so it works
+  without the source folder, and run from a temp copy since it deletes the app. It lists what goes with sizes and
+  needs `yes` typed (models can be many GB). Apps are matched by bundle id, not name. It leaves website passwords
+  from the Web tab (the user's login keychain) and Claude Code, Codex and Ollama (separate tools).
+- **Large switches lock the dropdown** (`VideoDock.switching`) until they finish: leaving Large drops the Keep lock
+  at once while the hover area is still Large's small frame, so a pointer outside it closed to the mini player.
 - **Welcome:** first run. Meet (and name it; `AssistantName` warns about names like "Claude" or command words), set
   up (permissions, look, voice, brains), tips.
 - **Brain setup** (Connections): `MacAdvice` reads chip, memory and disk and suggests brains. Claude Code and Codex

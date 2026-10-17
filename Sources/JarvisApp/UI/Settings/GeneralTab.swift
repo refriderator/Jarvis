@@ -69,13 +69,17 @@ private struct UpdateSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Button("Uninstall Jarvis…", role: .destructive) {
+                do { try Uninstaller.openUninstall() } catch { self.error = error.localizedDescription }
+            }
+            .help("Lists what would be removed and asks first")
             if let error {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
         } header: {
             Text("Update")
         } footer: {
-            Text("Opens Terminal to download the latest version and rebuild it (a few minutes). Your settings are kept.")
+            Text("Both open Terminal. Update downloads the latest version and rebuilds it (a few minutes); your settings are kept. Uninstall lists what it would remove (the app, settings, models, logs, saved keys) and asks before removing anything.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

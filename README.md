@@ -71,6 +71,20 @@ sh "Install Jarvis.command"
 
 Your settings are kept.
 
+## Uninstall
+
+In Jarvis: **Settings › General › Uninstall Jarvis…**. A Terminal window lists what it would remove (the app, its
+settings, downloaded models, logs, saved keys and permissions) and removes it only if you type `yes`. It asks
+separately before deleting the downloaded `~/Jarvis` folder.
+
+If Jarvis won't open, paste this in Terminal instead:
+
+```sh
+sh ~/Jarvis/scripts/uninstall.sh ~/Jarvis
+```
+
+Claude Code, Codex and Ollama are separate apps and stay; remove them their own way if you want them gone.
+
 ## Choose an AI
 
 Settings › Connections. A free local brain answers first; harder questions go to the cloud brain.
