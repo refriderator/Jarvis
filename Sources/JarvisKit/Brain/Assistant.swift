@@ -103,8 +103,8 @@ public final class Assistant {
             return
         }
         let needs = tools.needs(text)
-        // Photos need the cloud; Notion needs a local model that can use tools.
-        if needs.photo || (needs.notion && local?.canUseTools != true) { local = nil }
+        // Photos and Notion go to the cloud brain: a small local model misread Notion too often.
+        if needs.photo || needs.notion { local = nil }
         let decision = Router.decide(text, localAvailable: local != nil, preferLocal: state.settings.localFirst,
                                      hasTools: needs.notion || tools.isScheduling(text))
         let question = ChatMessage(.user, Persona.context() + tools.context(for: text) + decision.question)
@@ -166,7 +166,7 @@ public final class Assistant {
     /// Plain reply, or the tool loop when the request needs tools and the model can use them.
     private func askLocal(_ local: ChatProvider, text: String, history: [ChatMessage],
                           needs: Toolbox.CloudNeeds) async throws -> ChatReply {
-        let kits = local.canUseTools ? try tools.localKits(for: text, needs: needs) : []
+        let kits = local.canUseTools ? tools.localKits(for: text, needs: needs) : []
         if kits.isEmpty { return try await local.reply(system: Persona.local, history: history) }
         return try await LocalToolLoop.run(local, history: history, kits: kits, hint: tools.localHint(for: text, kits: kits, needs: needs))
     }

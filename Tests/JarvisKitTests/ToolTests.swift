@@ -12,6 +12,32 @@ struct TimerCommandTests {
         #expect(TimerCommand.parse("an hour timer please") == .start(seconds: 3600))
     }
 
+    @Test func readsReminders() {
+        #expect(TimerCommand.parse("remind me in 20 minutes to call mom") == .start(seconds: 1200, note: "call mom"))
+        #expect(TimerCommand.parse("remind me to take out the trash in an hour") == .start(seconds: 3600, note: "take out the trash"))
+        #expect(TimerCommand.parse("timer for an hour and a half") == .start(seconds: 5400))
+        #expect(TimerCommand.parse("remind me at 8:45 pm to call mom") == .at(hour: 8, minute: 45, pm: true, note: "call mom"))
+        #expect(TimerCommand.parse("remind me at 7 in the morning to leave") == .at(hour: 7, minute: 0, pm: false, note: "leave"))
+        #expect(TimerCommand.parse("remind me to put clothes in the dryer at 5") == .at(hour: 5, minute: 0, pm: nil, note: "put clothes in the dryer"))
+        #expect(TimerCommand.parse("remind me at 17:30 to cancel the gym") == .at(hour: 17, minute: 30, pm: nil, note: "cancel the gym"))
+        #expect(TimerCommand.parse("remind me at noon") == .at(hour: 12, minute: 0, pm: nil, note: nil))
+        #expect(TimerCommand.parse("remind me to call mom") == nil, "no time: a brain asks when")
+    }
+
+    @Test func refusesAlarms() {
+        #expect(TimerCommand.parse("set an alarm for 7 am") == .noAlarms)
+        #expect(TimerCommand.parse("wake me up at 6:30") == .noAlarms)
+        #expect(TimerCommand.parse("cancel my alarm") == .cancelAll)
+    }
+
+    @Test func nextClockTime() {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 17, hour: 9, minute: 0))!
+        let at = { (h: Int, pm: Bool?) in Calendar.current.dateComponents([.day, .hour], from: TimerCenter.next(hour: h, minute: 0, pm: pm, after: now)!) }
+        #expect(at(5, nil) == DateComponents(day: 17, hour: 17), "5 with no am/pm at 9 am: this evening")
+        #expect(at(10, nil) == DateComponents(day: 17, hour: 10))
+        #expect(at(7, false) == DateComponents(day: 18, hour: 7))
+    }
+
     @Test func cancelAndStatus() {
         #expect(TimerCommand.parse("cancel the timer") == .cancelAll)
         #expect(TimerCommand.parse("how long is left on my timer") == .status)

@@ -66,17 +66,11 @@ public struct Toolbox {
     private static let scheduling = #"\b(timers?|countdown|alarm|remind(er)?s?|remind me|wake me|calendar|schedule|appointment|event)\b"#
     private static let timerRequest = #"\b(set|start|make)\b.*\b(timer|alarm)\b|\b(remind|wake) me\b"#
 
-    /// The tools a local brain gets: the reading tools of everything that is set up (Notion when a token is saved,
-    /// timers, calendar), the Mac tools (apps, window dock, Quick Dock) and the calculator, whatever the wording, so the model decides what a request needs and no
-    /// word list has to. Nothing that adds, ticks, changes or deletes: those go to the cloud brain.
-    /// Throws if Notion is clearly wanted but no token is saved.
-    public func localKits(for text: String, needs: CloudNeeds) throws -> [ToolKit] {
+    /// The tools a local brain gets: timers, the calendar's reading tool, the Mac tools (apps, window dock, Quick Dock)
+    /// and the calculator, whatever the wording, so the model decides what a request needs and no word list has to.
+    /// Nothing that adds, changes or deletes, and no Notion: those go to the cloud brain.
+    public func localKits(for text: String, needs: CloudNeeds) -> [ToolKit] {
         var kits: [ToolKit] = []
-        if let kit = notion() {
-            kits.append(ReadOnlyKit(kit, allowed: ["due", "search", "read_page", "query_database"]))
-        } else if needs.notion {
-            throw ChatError("Add a Notion token in Settings › Connections first, then share your pages with it in Notion.")
-        }
         if let timers { kits.append(TimerTools(center: timers)) }
         if let calendar { kits.append(ReadOnlyKit(CalendarTools(source: calendar), allowed: ["list"])) }
         if let mac { kits.append(MacTools(controls: mac)) }
@@ -85,19 +79,8 @@ public struct Toolbox {
     }
 
     /// A nudge for a local model, so it reaches for the right tool instead of guessing or giving up.
-    /// Only questions that sound like Notion get a Notion hint; for the rest the model judges from the tool list.
     public func localHint(for text: String, kits: [ToolKit], needs: CloudNeeds) -> String? {
         var hints: [String] = []
-        if needs.notion, kits.contains(where: { $0.name == "notion" }) {
-            if text.range(of: Self.dueWords, options: [.regularExpression, .caseInsensitive]) != nil {
-                hints.append("The question is about what's due or to do: call notion_due first (it lists everything unfinished "
-                             + "with its date, exams and coursework apart, each soonest first), then answer from its result. Use days 7 for \"this week\", 1 for \"today\". "
-                             + "For \"next\", \"after\" or \"before\" questions use days 60, find the item the user named in the list, "
-                             + "then answer with the next matching item below it.")
-            } else {
-                hints.append("The question is about Notion: call notion_search first, then notion_read_page.")
-            }
-        }
         if kits.contains(where: { $0.name == "calendar" }), text.range(of: #"\b(calendar|schedule|free|busy|meeting|class|lecture)\b"#,
                                                                        options: [.regularExpression, .caseInsensitive]) != nil {
             hints.append("For the calendar, call calendar_list with today's date from the question's note.")
@@ -105,7 +88,6 @@ public struct Toolbox {
         return hints.isEmpty ? nil : hints.joined(separator: " ")
     }
 
-    private static let dueWords = #"\b(due|deadlines?|assignments?|homework|problem sets?|to-?do|todo list|tasks?|midterms?|exams?|tests?|quiz(zes)?)\b"#
 
     /// A change the local brain can't make (add, tick, move, delete...) to something that lives in an app the user can
     /// open: the app's name to offer ("Calendar", or "Notion" only when it's connected), else nil.
@@ -134,7 +116,7 @@ public struct Toolbox {
             return "I couldn't tell when. Try \"add dentist to my calendar tomorrow at 3pm\"."
         }
         if timers != nil, text.range(of: Self.timerRequest, options: [.regularExpression, .caseInsensitive]) != nil {
-            return "I couldn't tell how long. Try \"timer 10 minutes\" or \"remind me in 20 minutes\"."
+            return "I couldn't tell when. Try \"timer 10 minutes\", \"remind me in 20 minutes\" or \"remind me at 7 pm to call mom\"."
         }
         return nil
     }

@@ -13,7 +13,6 @@ struct SettingsView: View {
             Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(state: state) }
             Tab("Display", systemImage: "display") { DisplayTab(state: state) }
             Tab("Connections", systemImage: "link") { ConnectionsTab(state: state, downloader: downloader) }
-            Tab("Usage", systemImage: "number") { UsageTab(state: state) }
             Tab("Features", systemImage: "book") { FeaturesTab(state: state) }
         }
         .formStyle(.grouped)

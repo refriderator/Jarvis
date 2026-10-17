@@ -1,13 +1,12 @@
 import JarvisKit
 import SwiftUI
 
-/// The caption: the question and its answer, with who answered and how many tokens it took.
+/// The caption: the question and its answer.
 /// Click it to keep it on screen in full until you click off.
 struct CaptionView: View {
     let turn: Turn
     let skin: Skin
     let size: CaptionSize
-    let showTokens: Bool
     let speaking: Bool
     let pinned: Bool
     let showsSummary: Bool
@@ -47,11 +46,6 @@ struct CaptionView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack {
-                if let source = turn.source, !turn.awaitingCloud {
-                    Text(footer(source))
-                        .font(.caption2)
-                        .opacity(0.45)
-                }
                 if pinned {
                     Label("kept · click outside to close", systemImage: "pin.fill")
                         .font(.caption2)
@@ -120,10 +114,5 @@ struct CaptionView: View {
         case .regular: .body
         case .large: .title3
         }
-    }
-
-    private func footer(_ source: String) -> String {
-        guard showTokens, turn.tokens > 0 else { return source }
-        return "\(source) · \(turn.tokens.formatted()) tokens"
     }
 }

@@ -285,7 +285,7 @@ struct RealQwenNotionTests {
         for question in ["what's due this week", "any homework I need to do?", "what tasks do I have"] {
             let needs = box.needs(question)
             #expect(needs.notion)
-            let kits = try box.localKits(for: question, needs: needs)
+            let kits = box.localKits(for: question, needs: needs)
             let decision = Router.decide(question, localAvailable: true, preferLocal: true, hasTools: true)
             #expect(decision.route == .local, "\(question)")
             let reply = try await LocalToolLoop.run(brain, history: [ChatMessage(.user, Persona.context() + question)],

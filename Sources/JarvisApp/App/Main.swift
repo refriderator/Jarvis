@@ -56,12 +56,12 @@ private struct NoCalendar: CalendarSource {
 }
 
 /// The local tool-loop system prompt for a question, built by the same code the app uses to pick tools
-/// (Notion with a stand-in token, timers, calendar, Mac tools); nothing is ever called.
+/// (timers, calendar, Mac tools; Notion goes to the cloud brain); nothing is ever called.
 @MainActor
 private func localPrompt(for question: String) -> String {
     let kit = NotionTools(token: "x")
     let toolbox = Toolbox(timers: TimerCenter(state: AppState()), calendar: NoCalendar(), mac: MacControls(), notion: { kit })
     let needs = toolbox.needs(question)
-    let kits = (try? toolbox.localKits(for: question, needs: needs)) ?? []
+    let kits = toolbox.localKits(for: question, needs: needs)
     return LocalToolLoop.systemPrompt(kits: kits, hint: toolbox.localHint(for: question, kits: kits, needs: needs))
 }

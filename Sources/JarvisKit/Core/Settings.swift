@@ -75,8 +75,6 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Saves every question and model call, raw, to Application Support/Jarvis/Logs (see `TurnLog`).
     public var logConversations = false
 
-    // Usage
-    public var showTokens = true
 
     public var hasCompletedWelcome = false
 

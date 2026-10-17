@@ -156,12 +156,12 @@ struct TodayListTests {
 struct TimerListTests {
     private let now = ISO8601DateFormatter().date(from: "2026-10-13T15:00:00Z")!
 
-    @Test func timersCountDownAndAlarmsShowTheirTime() {
+    @Test func timersCountDownAndRemindersShowTheirTime() {
         let timer = JarvisTimer(seconds: 300, ends: now.addingTimeInterval(299.5))
         let reminder = JarvisTimer(seconds: 3600, ends: now.addingTimeInterval(3600), note: "call mom")
         let alarm = JarvisTimer(seconds: 86_000, ends: now.addingTimeInterval(86_000), alarm: true)
         let rows = TimerList.rows([timer, reminder, alarm], now: now)
-        #expect(rows.map(\.title) == ["5 minute timer", "Call mom", "Alarm"])
+        #expect(rows.map(\.title) == ["5 minute timer", "Call mom", "Reminder"])
         #expect(rows[0].value == "5:00")
         #expect(rows[2].value.hasSuffix("tomorrow"))
         #expect(TimerList.countdown(3725) == "1:02:05")

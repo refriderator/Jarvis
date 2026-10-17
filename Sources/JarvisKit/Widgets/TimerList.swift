@@ -1,6 +1,6 @@
 import Foundation
 
-/// One running timer, alarm or reminder as a row of the open notch.
+/// One running timer or reminder as a row of the open notch.
 public struct TimerRow: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let title: String
@@ -13,7 +13,7 @@ public enum TimerList {
     public static func rows(_ timers: [JarvisTimer], now: Date, max: Int = NotchLayout.maxTimerRows) -> [TimerRow] {
         timers.prefix(max).map { timer in
             if timer.alarm || timer.note != nil {
-                let title = timer.note.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "Alarm"
+                let title = timer.note.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "Reminder"
                 return TimerRow(id: timer.id, title: title, value: clock(timer.ends, now: now))
             }
             let title = timer.label.prefix(1).uppercased() + timer.label.dropFirst() + " timer"

@@ -25,7 +25,7 @@ Status: **M5 done** (notch shell, settings, welcome, text chat, voice, tools), p
   and a leading "Hey <name>," is dropped from questions; local prompts never name it (the trained model is unaffected).
 - **Brain setup** (Connections tab, also the welcome's last step): "This Mac" reads chip, memory and free disk and suggests brains (`MacAdvice`): 24 GB+ built-in Qwen3 8B, 16 GB Qwen3 4B, 8 GB Apple Intelligence (a built-in model would slow other apps), Intel Claude only; warns about low disk, Apple Intelligence being off, battery use, no notch. Claude Code can be installed (Anthropic's installer) and signed in (one Terminal window for the browser sign-in) from inside Jarvis (`ClaudeCodeSetup`); it needs a Pro or Max plan.
 - **Main panel:** text field + mic button, captions above/below.
-- **Notch dropdown:** timers, token count, quick toggles.
+- **Notch dropdown:** timers, quick toggles.
 - **Settings window:** tabs below.
 
 ## Notch behavior
@@ -86,7 +86,7 @@ States: **idle -> peek -> open**.
 - Stop-talking key: registered only while Jarvis is speaking so it never steals a key (e.g. Esc) otherwise. Captions show a small chip with the bound key, e.g. `esc stop`.
 
 ## Menu (slim, important only)
-Talk / Type · Stop talking · Skin (submenu to switch) · Timers · Token count (if enabled) · Settings... · Quit
+Talk / Type · Stop talking · Skin (submenu to switch) · Timers · Settings... · Quit
 
 Jarvis must work fully with the menu icon hidden ("Show in menu bar" toggle). Runs as an accessory app (no Dock icon); notch and hotkeys keep working. Settings reachable via hotkey, the notch dropdown, or relaunching the app.
 
@@ -95,7 +95,6 @@ Jarvis must work fully with the menu icon hidden ("Show in menu bar" toggle). Ru
 - **Voice:** voice, speed, mic device, push-to-hold vs toggle.
 - **Appearance:** skin picker, caption style.
 - **Connections:** Claude/chat key + model, Notion token, Calendar permission, later Google.
-- **Usage:** token display toggle, reset.
 
 Settings are one `Settings` struct saved to a file; the window is a form over it. New toggle = one field + one row.
 
@@ -111,11 +110,11 @@ The open notch shows a big rounded time and date (left), a friendly weather line
 ## Brain
 Most questions never reach Claude:
 1. Fixed commands in plain code (timers etc., M5). "Dock Safari" (`AppCommand.dock`) puts every window of that app showing on this desktop in the dock; "dock this" is left to the local brain's dock tool, which knows the window in front.
-2. **Local brain first** (setting, on by default; questions answered from the user's own data (Notion, calendar, timers) skip the "recent" news rule, so "what's due this week" stays local; the local model gets a hint to call `notion_due`, `notion_search` or `calendar_list` first): the local brain tries everything, including writing, maths, code and long questions; only anything recent ("news", "who won", "weather"...) and camera requests skip it. A local model that can use tools (built-in Qwen, Ollama; not Apple on-device) gets every tool that is set up (timers, calendar, Notion) on every question through `LocalToolLoop`, and decides itself which a request needs: it replies with one line of JSON, Jarvis runs the tool and sends the result back. Every value is checked by the tool (timer 1 s to 24 h, dates within two years, real ids), so a wrong guess is refused, not acted on. Broken JSON is retried, never shown. Plainly worded timers ("timer 5 minutes") are still done by code instantly; calendar adds go to Qwen, which reads loose wording ("tomorrow evening around six") better.
+2. **Local brain first** (setting, on by default; questions answered from the user's own data (calendar, timers) skip the "recent" news rule; the local model gets a hint to call `calendar_list` first): the local brain tries everything, including writing, maths, code and long questions; only anything recent ("news", "who won", "weather"...), camera requests and Notion skip it. Notion (named, or worded like it with a token saved) always goes to the cloud brain: the 8B model misread which item was next too often (10-17). A local model that can use tools (built-in Qwen, Ollama; not Apple on-device) gets every tool that is set up (timers, calendar, Mac tools, the calculator; never Notion) on every question through `LocalToolLoop`, and decides itself which a request needs: it replies with one line of JSON, Jarvis runs the tool and sends the result back. Every value is checked by the tool (timer 1 s to 24 h, dates within two years, real ids), so a wrong guess is refused, not acted on. Broken JSON is retried, never shown. Plainly worded timers ("timer 5 minutes") are still done by code instantly; calendar adds go to Qwen, which reads loose wording ("tomorrow evening around six") better.
    With the setting off, the old rules apply: `Router`: plain word rules. Small questions go to the local brain; Notion, writing, code, maths, long questions and anything recent go to the cloud brain. "Claude, ..." forces the cloud.
 3. The local brain replies `ESCALATE` when unsure; Jarvis then asks the cloud brain (caption says "local unsure").
-   A local model with tools is a function bot (10-16): it only does things with its tools (timers and alarms, reading
-   Notion and the calendar, the calculator, and the Mac tools: `mac_open_app`, `mac_dock_window` / `mac_undock_window`
+   A local model with tools is a function bot (10-16): it only does things with its tools (timers and reminders, reading
+   the calendar, the calculator, and the Mac tools: `mac_open_app`, `mac_dock_window` / `mac_undock_window`
    for the notch's window dock, `mac_quick_dock` on or off) and never answers from its own knowledge: facts,
    explanations, opinions and writing all get `ESCALATE`. A change it can't make to the calendar (or Notion, when
    connected) gets "you're probably the better person for the job. Want me to open Calendar?", and a yes opens it.
@@ -155,7 +154,7 @@ Most questions never reach Claude:
 
 ## Tools the model can call
 `calendar`, `notion`, `timer`, `camera`, in `JarvisKit/Tools/`. `Toolbox` decides what a request needs.
-- Timer: plain code, no model (`TimerCommand` reads "timer 5 minutes", "half an hour timer", "cancel the timer", "how long is left"). When one ends: Glass chime, the notch opens, and it's said aloud. The next timer counts down in the peek and the open panel's top band; the menu lists them to cancel.
+- Timer: plain code, no model (`TimerCommand` reads "timer 5 minutes", "an hour and a half timer", "remind me in 20 minutes to stretch", "remind me at 8:45 pm to call mom", "cancel the timer", "how long is left"). Timers and reminders only: an alarm ("set an alarm", "wake me up at 7") gets a reply saying so and what to say instead, since Jarvis can't wake a sleeping Mac or reach a phone. A clock time without am/pm is whichever comes next; "tonight" and "in the morning" settle it. The caption shows just the question and answer (who answered and the token count are gone, 10-17). When one ends: Glass chime, the notch opens, and it's said aloud. The next timer counts down in the peek and the open panel's top band; the menu lists them to cancel.
 - Calendar: EventKit, i.e. Apple Calendar, so Google, iCloud and Exchange calendars added in System Settings › Internet Accounts count; the local brain can list, add, change (move, retime, rename) and delete single events, by real ids from the list, and a delete must also name the event; Settings lists the calendars Jarvis sees and has an "Add Google Calendar…" shortcut. No separate Google sign-in (that would need a registered Google Cloud OAuth app). "Add X to my calendar tomorrow at 3pm" is plain code (`NSDataDetector` for the date, no time means all day). Schedule questions get the events (today and tomorrow, or the week) put in front of the question for whichever brain answers. The open panel lists running timers, alarms and reminders first (a countdown, or the time they go off; hover for an x that cancels), then the "TODAY" list shows today's remaining events, then only what's due today from Notion (done items hidden), up to 4 rows (8 pushed the music row and search field too far down); Settings › General can hide it.
 - Notion: the user's integration token (Keychain). Notion lookups stay local; Notion changes (add, edit, mark done...) always go to Claude. Claude API: Jarvis runs the tool loop itself. Claude Code: Jarvis starts itself as a tiny MCP server (`Jarvis --notion-mcp`, `MCPServer`), the only MCP server loaded; the token goes to it through the environment (`${JARVIS_NOTION_TOKEN}` in the config), never the command line, a file or logs. Tools: due (unfinished items with a date from today on, across every shared database with a date column, soonest first, said like "due Thursday at 6:45 AM"), search, read page, append (to-dos or text), tick a to-do, create a page or database row, list a database. Questions about due dates, assignments, homework or to-do lists bring the Notion tools when a token is saved, without saying "Notion". The instructions tell the model it really is connected and to retry on errors rather than say it can't.
 - Camera: "look at this", "what am I holding"... takes one photo after any token-saving check, then sends it as an image (Claude API) or as `./camera.jpg` with the Read tool (Claude Code). OpenAI-compatible brains can't use Notion or the camera and say so.

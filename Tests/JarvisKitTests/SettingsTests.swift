@@ -4,10 +4,9 @@ import Testing
 
 struct SettingsTests {
     @Test func missingFieldsKeepTheirDefaults() throws {
-        let saved = Data(#"{"skinID": "arc", "showTokens": false}"#.utf8)
+        let saved = Data(#"{"skinID": "arc"}"#.utf8)
         let settings = try Settings.decode(saved)
         #expect(settings.skinID == "arc")
-        #expect(settings.showTokens == false)
         #expect(settings.openTrigger == Settings().openTrigger)
         #expect(settings.speechRate == Settings().speechRate)
     }

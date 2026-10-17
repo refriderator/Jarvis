@@ -197,7 +197,7 @@ struct OpenPanelView: View {
                     .transition(.opacity)
             } else if state.captionActive, let turn = state.turns.last {
                 CaptionView(turn: turn, skin: state.skin, size: state.settings.captionSize,
-                            showTokens: state.settings.showTokens, speaking: state.voice == .speaking,
+                            speaking: state.voice == .speaking,
                             pinned: state.captionPinned, showsSummary: state.showsSummary,
                             togglePin: state.toggleCaptionPin,
                             summarize: { turn.summary == nil ? assistant.summarize() : state.toggleSummary() },
