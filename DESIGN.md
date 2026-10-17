@@ -91,7 +91,7 @@ Talk / Type · Stop talking · Skin (submenu to switch) · Timers · Settings...
 Jarvis must work fully with the menu icon hidden ("Show in menu bar" toggle). Runs as an accessory app (no Dock icon); notch and hotkeys keep working. Settings reachable via hotkey, the notch dropdown, or relaunching the app.
 
 ## Settings window
-- **General:** launch at login, menu icon on/off, notch open mode, hotkeys.
+- **General:** launch at login, menu icon on/off, notch open mode, hotkeys, Update. Update (`Updater`) opens a Terminal window that runs `git pull` and the installer in the folder this copy was built from (`bundle.sh` writes it into Info.plist as `JarvisSourceFolder`). It runs in Terminal, not in the background, because the installer quits Jarvis, and so errors and Apple's license prompt can be seen and answered.
 - **Voice:** voice, speed, mic device, push-to-hold vs toggle.
 - **Appearance:** skin picker, caption style.
 - **Connections:** Claude/chat key + model, Notion token, Calendar permission, later Google.

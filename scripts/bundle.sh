@@ -10,6 +10,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$(swift build -c "$CONFIG" --show-bin-path)/Jarvis" "$APP/Contents/MacOS/Jarvis"
 cp Support/Info.plist "$APP/Contents/Info.plist"
+# Where this copy was built from, so Settings › General › Update can pull and rebuild it.
+/usr/libexec/PlistBuddy -c "Add :JarvisSourceFolder string $(pwd)" "$APP/Contents/Info.plist"
 # The icon (redraw it with scripts/make-icon.sh).
 mkdir -p "$APP/Contents/Resources"
 cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

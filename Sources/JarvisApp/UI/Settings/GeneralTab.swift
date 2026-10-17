@@ -49,6 +49,35 @@ struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            UpdateSection()
+        }
+    }
+}
+
+private struct UpdateSection: View {
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            if let folder = Updater.sourceFolder {
+                Button("Update Jarvis…") {
+                    do { try Updater.openUpdate() } catch { self.error = error.localizedDescription }
+                }
+                .help("Gets the latest version from \(folder.path) and installs it")
+            } else {
+                Text("Can't find the folder Jarvis was installed from. Update from Terminal as the README says.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Update")
+        } footer: {
+            Text("Opens Terminal to download the latest version and rebuild it (a few minutes). Your settings are kept.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

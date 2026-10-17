@@ -30,6 +30,11 @@ Stuck?
   are broken, usually from an old copy left over after a macOS update. Reinstall them: paste
   `sudo rm -rf /Library/Developer/CommandLineTools` and press **Return** (type your Mac password; nothing shows
   as you type), then `xcode-select --install` and click **Install**. When it's done, do step 3 again.
+- Step 3 says it needs **Swift 6.2 or newer**? Your Apple developer tools are too old. If you have Xcode, update
+  it to Xcode 26 from the App Store, then paste `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
+  and press **Return**. Otherwise, reinstall the Command Line Tools as in the step above. Then do step 3 again.
+- Step 3 prints a long license and asks you to agree? Press **q**, paste `sudo xcodebuild -license accept`, press
+  **Return** and type your Mac password. Then do step 3 again.
 - Don't double-click the installer from a downloaded ZIP: macOS blocks it. Use the steps above.
 
 Next time, open Jarvis from Applications.
