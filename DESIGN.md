@@ -25,7 +25,12 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - States **idle → peek → open**. Open on hover, or on click with hover only peeking (Settings › General).
 - Closes when the pointer leaves, a click lands outside, or Esc. While a caption is up, the pointer leaving doesn't close it.
 - Sits on the Mac's own display unless another is picked (kept by vendor, model and serial, so it comes back to the
-  right monitor). Displays without a notch get a pill showing the **ticker** (time, music, battery, weather, next
+  right monitor). Moving it rises off one display and drops onto the other with a bounce (`NotchHop`), and every
+  tray does the same. Only where there's no hardware notch: beside one, the closed notch is drawn as that notch and
+  tabs hang from it, so rising or stretching looked like the notch (or a tab's base) moving; there the tabs slide in
+  behind the notch and spring back out. Moved down, the screen's edge showed above it, so the dip and bounce stretch
+  from the top edge instead. An open dropdown closes first. With a video held it moves at once and the video goes
+  with it (a real window can't rise with the notch); a full-screen video is never held or offered, so it stays. Displays without a notch get a pill showing the **ticker** (time, music, battery, weather, next
   event, one line at a time; Settings › Display).
 - **Captions:** the answer replaces the Today list under the time, stays a reading pause, then closes. A reply never
   opens a new dropdown, except when you closed it mid-answer: then it pops back once. Click a caption to keep it.
@@ -55,12 +60,25 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
   Pointing at the edge shows cards for them (`SidePeek`); click one to use it, it slides back when the pointer
   leaves. Sides with another display against them aren't used; with no free side the window is minimized into the
   notch's strip instead. Up to 6 per desktop.
-- Each desktop has its own strip. Other displays get a small tray from the menu bar (`ScreenTrays`).
+- Each desktop has its own strip. Other displays get a small tray from the menu bar (`ScreenTrays`); the Mac's own
+  display, while the notch is on another, gets a tab with the dot on the hardware notch's right (like the apps' tab
+  beside the notch, starting under the notch's flat bottom, clear of its round corner) that opens to the same grid
+  hanging below the notch, wider than it so no corner hides behind the notch's round ones. A tray's window covers
+  every stage and takes clicks only over the tray. A window dragged over a tray shows its app's icon in the next
+  empty place.
 - Letting go puts a window back where it was; quitting Jarvis puts every held window back.
+- A window put in the notch (or a tray) is held on that display, wherever it was dragged from: parked on that
+  display's side, so it shows in that display's strip. Held on its own display, it showed on the side but not in
+  the notch it was put in. Letting go still puts it back where it really was.
+- A window taken out of a side (popped out, dragged by its title bar) never opens the notch's drop box or a tray:
+  its drops are the middle of the display (let go of) or another edge (moved there).
 - Why cards and not real shrunk windows: macOS has no public way to scale another app's window, and raising one
   without activating its app doesn't put it above the app in front. The first version held the real window under a
   hole in the notch; macOS owns real windows' desktops, stacking and Mission Control, so it glitched on all three.
 - Desktops are read (never changed) through SkyLight's private calls (`Desktops`); there is no public API.
+- Accessibility calls wait for the other app on the main thread, so they're kept rare and short: held windows are
+  checked twice a second (not while cards are out), and every call gives up after 0.5 s (`AXWindowControl.timeout`).
+  Checked 30 times a second with the 6 s default, a busy app made the side cards stutter.
 - **Quick Dock** (`QuickDock`): one window per desktop. The app you bring forward fills the desktop and the rest go to
   the sides. Refuses to turn on past 7 windows on a desktop; changing desktops in Mission Control turns it off.
 

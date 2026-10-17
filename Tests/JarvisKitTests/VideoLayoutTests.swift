@@ -153,4 +153,12 @@ struct VideoLayoutTests {
         #expect(!VideoDock.fillsScreen(CGRect(x: 800, y: 900, width: 480, height: 270), screens: screens), "Large is not full screen")
         #expect(!VideoDock.fillsScreen(CGRect(x: 900, y: 1040, width: 220, height: 124), screens: screens), "nor the mini player")
     }
+
+    @MainActor @Test func aTuckedVideoIsNeverLarge() {
+        let state = AppState()
+        state.updateVideo { $0.held = true; $0.theater = true }
+        #expect(state.layout.theater)
+        state.updateVideo { $0.tucked = true; $0.tuckedSize = CGSize(width: 59, height: 33) }
+        #expect(!state.layout.theater, "Large is the video's hole: tucked away, it would be an empty frame")
+    }
 }

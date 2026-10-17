@@ -42,7 +42,14 @@ public protocol WindowControlling {
 /// System Settings › Privacy & Security › Accessibility; without it every call finds nothing.
 @MainActor
 public struct AXWindowControl: WindowControlling {
-    public init() {}
+    public init() {
+        // Every call waits for the other app to answer, on the main thread; by default up to about 6 s for a busy
+        // or hung app, which froze the notch and the side cards' animation. Capped for every element at once.
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), Self.timeout)
+    }
+
+    /// The longest any Accessibility call may wait for an app.
+    public static let timeout: Float = 0.5
 
     public func window(at point: CGPoint) -> ForeignWindow? {
         // Only ordinary windows: panels and dialogs are left alone, and so are floating windows like Picture in

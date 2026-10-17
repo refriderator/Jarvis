@@ -168,10 +168,14 @@ final class DockController {
             draggedIcon = NSRunningApplication(processIdentifier: pressed.window.pid)?.icon
         }
         let pointer = NSEvent.mouseLocation
+        // Taken out of a side (popped out and dragged by its title bar): it's let go of in the middle of the display
+        // (`SideDockController`'s outline) or moved to another edge, never put back in the notch or a tray, so
+        // neither opens for it.
+        let fromSide = sides.isParked(pressed.window)
         // Another display's tray takes apps (a Finder window's folder only goes to the notch's Finder tab).
-        overTrayNow = kind == .app && overTray(pointer)
+        overTrayNow = !fromSide && kind == .app && overTray(pointer)
         // At the notch the dropdown opens with the box; well away from the whole dropdown it closes again.
-        if opener.update(pointer: pointer, catchIn: state.layout.notch, releaseOutside: state.layout.frame(for: .open)) {
+        if !fromSide, opener.update(pointer: pointer, catchIn: state.layout.notch, releaseOutside: state.layout.frame(for: .open)) {
             log.debug("drag: dropdown \(self.opener.caught ? "opens" : "closes")")
             state.updateDock { $0.dragging = opener.caught ? kind : nil; $0.catching = false }
             onWindowDrag()
@@ -193,6 +197,7 @@ final class DockController {
     /// The button came up after a window drag: take it if it was let go on the box.
     private func finishDrag() {
         let window = movingWindow && (catcher.caught || overTrayNow) ? pressed?.window : nil
+        let caughtByNotch = catcher.caught
         let opened = opener.caught
         let edge = movingWindow && !catcher.caught && !overTrayNow ? pressed?.window : nil
         stopTracking()
@@ -200,7 +205,10 @@ final class DockController {
         state.updateDock { $0.dragging = nil; $0.catching = false }
         if opened { onWindowDrag() }
         if let window {
-            kind(of: window) == .folder ? holdFolder(window) : holdApp(window)
+            // Held where it was put: in the notch, on the notch's display; on a tray, on that tray's display.
+            let pointer = NSEvent.mouseLocation
+            let onto = caughtByNotch ? state.notchScreen : NSScreen.screens.first { $0.frame.contains(pointer) }
+            kind(of: window) == .folder ? holdFolder(window) : holdApp(window, onto: onto)
         } else if opened, !state.layout.hotZone(for: .open).contains(NSEvent.mouseLocation), !state.notch.locked {
             // Opened by the drag but let go elsewhere: nothing to show.
             state.send(.dismiss)
@@ -253,9 +261,12 @@ final class DockController {
 
     /// Minimized, its icon in the tab. The dropdown stays until the pointer leaves it; the tab comes out after.
     /// Holding on the sides, it's slid off the nearer edge instead (minimized only when it can't be).
-    func holdApp(_ window: ForeignWindow) {
-        if sides.park(window, makeRoom: false) { return }
-        let desktop = Desktops.of(window.element).first ?? Desktops.active(on: state.notchScreen?.displayID)
+    /// `onto`: the display it was put in the notch or a tray of, when that isn't its own (it's held there, so it
+    /// shows in that display's strip).
+    func holdApp(_ window: ForeignWindow, onto: NSScreen? = nil) {
+        if sides.park(window, makeRoom: false, onto: onto) { return }
+        let desktop = onto.map { Desktops.active(on: $0.displayID) }
+            ?? Desktops.of(window.element).first ?? Desktops.active(on: state.notchScreen?.displayID)
         // Held on the sides counts too: 6 per desktop in all.
         guard state.dock.apps(on: desktop).count < NotchDock.maxApps else { return NSSound.beep() }
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "App"

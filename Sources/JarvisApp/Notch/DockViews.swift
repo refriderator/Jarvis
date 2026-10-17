@@ -10,11 +10,13 @@ struct DockTab: View {
     let dock: DockController
     let video: VideoController
     let stage: NotchStage
+    /// Moving to another display: in behind the notch until it has arrived (`NotchHop`).
+    @Environment(\.tabsTucked) private var tucked
 
     var body: some View {
         GeometryReader { geo in
             let layout = state.layout
-            let shown = stage == .idle && layout.showsTab && video.morph == nil
+            let shown = stage == .idle && layout.showsTab && video.morph == nil && !tucked
             // In front of a tucked video's tab, no glow: it would light up that tab under it like a seam.
             TabBody(skin: state.skin, shown: shown, width: layout.tabFrame.width + DockTabShape.flare,
                     glows: !state.video.tucked, height: layout.tabFrame.height) {

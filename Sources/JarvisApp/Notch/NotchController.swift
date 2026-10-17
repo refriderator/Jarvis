@@ -25,6 +25,10 @@ final class NotchController {
     private var quickDock: QuickDock?
     /// The strips on displays without the notch.
     private var trays: ScreenTrays?
+    /// Moving to another display rises off one and drops onto the other.
+    private let hop = NotchHop()
+    /// The display the notch is on, to tell a move from other relayouts.
+    private var shownDisplay = ""
 
     /// Ends a finished caption after a reading pause.
     private var captionTimer: DispatchWorkItem?
@@ -70,8 +74,10 @@ final class NotchController {
             // SwiftUI's global frame is measured from the panel's top-left corner, y going down.
             CGRect(x: panel.frame.minX + rect.minX, y: panel.frame.maxY - rect.maxY, width: rect.width, height: rect.height)
         }
-        panel.contentView = NSHostingView(rootView: NotchView(state: state, feed: feed, assistant: assistant, voice: voice,
-                                                              dock: dock, monitor: monitor, browser: browser, video: video, openSettings: openSettings, cancelTimer: cancelTimer))
+        panel.contentView = NSHostingView(rootView: Hopping(hop: hop, content: NotchView(
+            state: state, feed: feed, assistant: assistant, voice: voice, dock: dock, monitor: monitor, browser: browser,
+            video: video, openSettings: openSettings, cancelTimer: cancelTimer)))
+        shownDisplay = state.settings.notchDisplay
         relayout()
         panel.orderFrontRegardless()
         installMonitors()
@@ -107,11 +113,43 @@ final class NotchController {
             _ = state.settings.tickerItems
         } onChange: { [weak self] in
             Task { @MainActor in
-                self?.relayout()
-                self?.trays?.rebuild()
+                self?.displayChanged()
                 self?.observeDisplay()
             }
         }
+    }
+
+    /// A new display: the notch and every tray leave their displays and arrive on the new ones (`NotchHop`). Open,
+    /// the dropdown closes first: rising a whole dropdown away, then closing it on the new display, was jerky. With a
+    /// video held it moves at once, and the video with it: the video is a real window that can't rise with the
+    /// notch. A video playing full screen isn't held (`VideoController` lets go of it), so that one hops, and the
+    /// full-screen video is left alone.
+    private func displayChanged() {
+        let moved = state.settings.notchDisplay != shownDisplay
+        shownDisplay = state.settings.notchDisplay
+        guard moved else {
+            relayout()
+            trays?.rebuild()
+            return
+        }
+        guard !state.video.held else {
+            relayout()
+            trays?.rebuild()
+            video.displayChanged()
+            return
+        }
+        let hopNow = { [weak self] in
+            guard let self else { return }
+            trays?.leave()
+            hop.hop(height: { [state] in state.layout.frame(for: state.notch.mode).height },
+                    rises: { [state] in state.layout.isPill }) { [weak self] in
+                self?.relayout()
+                self?.trays?.rebuild(arriving: true)
+            }
+        }
+        guard state.notch.mode == .open else { return hopNow() }
+        state.send(.dismiss)
+        DispatchQueue.main.asyncAfter(deadline: .now() + closeAnimationSeconds) { hopNow() }
     }
 
     /// Windows held on the sides go back where they were (on quitting, so none are left off the screen).

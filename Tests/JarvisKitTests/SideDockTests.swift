@@ -142,15 +142,16 @@ struct TrayLayoutTests {
         #expect(layout.dropZone.contains(open))
     }
 
-    @Test func besideAHardwareNotchItSlidesOutSideways() {
+    @Test func besideAHardwareNotchItRestsOnTheSideAndOpensBelow() {
         let notch = CGRect(x: 1000, y: 1138, width: 180, height: 32)
         let layout = TrayLayout(screen: screen, menuBarHeight: 32, hardwareNotch: notch)
-        #expect(layout.frame(for: .hidden) == notch)
-        for stage in [TrayStage.dot, .open] {
-            let frame = layout.frame(for: stage)
-            #expect(frame.minX == notch.minX && frame.minY == notch.minY && frame.height == notch.height)
-            #expect(frame.maxX > notch.maxX)
-        }
-        #expect(layout.frame(for: .open).width > layout.frame(for: .dot).width)
+        let hidden = layout.frame(for: .hidden), dot = layout.frame(for: .dot), open = layout.frame(for: .open)
+        #expect(hidden.maxX <= notch.maxX, "hidden, all of it is behind the notch")
+        #expect(dot.minX < notch.maxX && dot.maxX > notch.maxX, "resting, a tab out of the notch's right side")
+        #expect(dot.minX >= notch.maxX - 24, "starting under the notch's flat bottom, clear of its round corner")
+        #expect(dot.height == notch.height && dot.maxY == notch.maxY)
+        #expect(open.midX == notch.midX && open.maxY == screen.maxY, "open, it hangs from the notch's middle")
+        #expect(open.width > notch.width, "wider than the notch, so its corners aren't behind the notch's round ones")
+        #expect(layout.bounds.contains(dot) && layout.bounds.contains(open), "its window covers every stage")
     }
 }

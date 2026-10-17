@@ -15,9 +15,11 @@ public enum TrayStage: Int, Sendable, Equatable, Comparable {
 /// The held-windows tray on a display that isn't the notch's: where it sits in each stage, and where a window
 /// dragged by its title bar opens it and is caught. Screen coordinates (origin bottom-left, y up).
 ///
-/// Without a hardware notch it hangs from the middle of the menu bar and opens downward. With one (the Mac's own
-/// display while the notch is on another), it slides out sideways from behind the hardware notch, its grid's two
-/// rows sharing the notch's height, and slides back behind it to hide.
+/// Open, it hangs from the middle of the top edge as a 2 × 3 grid, the same on every display: from the menu bar,
+/// or from the hardware notch (the Mac's own display while the notch is on another), a little wider than that
+/// notch so its shoulders curve into the menu bar like the notch's own. Resting with the dot, it hangs from the menu
+/// bar too; beside a hardware notch it's a tab on the notch's right instead, like the apps' tab beside the notch,
+/// sliding out from behind it.
 public struct TrayLayout: Sendable, Equatable {
     public var screen: CGRect
     public var menuBarHeight: CGFloat
@@ -26,15 +28,15 @@ public struct TrayLayout: Sendable, Equatable {
 
     public static let columns = 3
     public static let rows = NotchDock.maxApps / columns
-    /// A place in the grid hanging below the menu bar, and the room around the grid.
+    /// A place in the grid, and the room around the grid.
     public static let slot = CGSize(width: 52, height: 44)
     public static let padding: CGFloat = 14
-    /// The resting notch without a hardware one.
+    /// The resting tab's width without a hardware notch.
     public static let dotWidth: CGFloat = 56
-    /// Beside a hardware notch: each column's width, how far the dot shows past it, and the room at the end.
-    public static let besideSlot: CGFloat = 30
-    public static let besideDot: CGFloat = 20
-    public static let besideEnd: CGFloat = 12
+    /// Beside a hardware notch: how far the tab starts under the notch (well clear of its round bottom corner), and
+    /// how much of it shows past the notch (the flare included).
+    public static let besideTuck: CGFloat = 20
+    public static let besideOut: CGFloat = 26
 
     public init(screen: CGRect, menuBarHeight: CGFloat, hardwareNotch: CGRect? = nil) {
         self.screen = screen
@@ -42,24 +44,35 @@ public struct TrayLayout: Sendable, Equatable {
         self.hardwareNotch = hardwareNotch
     }
 
+    /// What the open grid hangs from: the menu bar, or the hardware notch.
+    public var hangsFrom: CGFloat { hardwareNotch?.height ?? menuBarHeight }
+
+    /// Resting (and hidden) as a tab beside the hardware notch rather than hanging below the middle.
+    public func isBeside(_ stage: TrayStage) -> Bool { hardwareNotch != nil && stage != .open }
+
     /// The tray's shape in `stage`.
     public func frame(for stage: TrayStage) -> CGRect {
-        if let notch = hardwareNotch {
-            let past: CGFloat = switch stage {
-            case .hidden: 0
-            case .dot: Self.besideDot
-            case .open: CGFloat(Self.columns) * Self.besideSlot + Self.besideEnd
-            }
-            return CGRect(x: notch.minX, y: notch.minY, width: notch.width + past, height: notch.height)
+        if let notch = hardwareNotch, stage != .open {
+            // Hidden, only the part under the notch: it slides out from behind it.
+            let width = Self.besideTuck + (stage == .dot ? Self.besideOut : 0)
+            return CGRect(x: notch.maxX - Self.besideTuck, y: notch.minY, width: width, height: notch.height)
         }
+        let grid = CGFloat(Self.columns) * Self.slot.width + 2 * Self.padding
         let size: CGSize = switch stage {
         case .hidden: CGSize(width: Self.dotWidth, height: 0)
         case .dot: CGSize(width: Self.dotWidth, height: menuBarHeight)
-        case .open: CGSize(width: CGFloat(Self.columns) * Self.slot.width + 2 * Self.padding,
-                           height: menuBarHeight + CGFloat(Self.rows) * Self.slot.height + Self.padding)
+        // Wider than a hardware notch, so its corners aren't hidden behind the notch's round ones.
+        case .open: CGSize(width: max(grid, (hardwareNotch?.width ?? 0) + 2 * Self.padding),
+                           height: hangsFrom + CGFloat(Self.rows) * Self.slot.height + Self.padding)
         }
-        return CGRect(x: (screen.midX - size.width / 2).rounded(), y: screen.maxY - size.height,
+        let middle = hardwareNotch?.midX ?? screen.midX
+        return CGRect(x: (middle - size.width / 2).rounded(), y: screen.maxY - size.height,
                       width: size.width, height: size.height)
+    }
+
+    /// Everywhere the tray can be, in any stage: its window covers this, and takes clicks only over the tray.
+    public var bounds: CGRect {
+        [TrayStage.hidden, .dot, .open].map(frame(for:)).reduce(CGRect.null) { $0.union($1) }
     }
 
     /// A window's title bar dragged here (the top middle of the display) opens the tray.

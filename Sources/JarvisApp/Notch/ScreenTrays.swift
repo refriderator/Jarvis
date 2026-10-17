@@ -20,6 +20,8 @@ final class ScreenTrays {
     private final class Tray {
         let panel = NotchPanel()
         let model: TrayModel
+        /// Rising off and dropping on when the notch changes display, like the notch.
+        let hop = NotchHop()
         let screen: NSScreen
         /// A dragged window's title bar is at this display's top middle.
         var dragNear = false
@@ -59,8 +61,20 @@ final class ScreenTrays {
         }
     }
 
-    /// One tray per display other than the notch's (after a display is plugged in, or the notch moves).
-    func rebuild() {
+    /// The notch is moving to another display: every tray goes with it (`rebuild(arriving:)` brings the new ones).
+    /// As for the notch: a tray rises away and stretches only where there's no hardware notch; beside one, its
+    /// tab tucks in behind the notch (open, hanging below it, it rises into it).
+    func leave() {
+        for tray in trays.values where tray.model.stage != .hidden {
+            let layout = tray.model.layout
+            tray.hop.leave(height: layout.frame(for: tray.model.stage).height,
+                           rises: !layout.isBeside(tray.model.stage), springy: layout.hardwareNotch == nil)
+        }
+    }
+
+    /// One tray per display other than the notch's (after a display is plugged in, or the notch moves). `arriving`:
+    /// they drop in from above, after `leave`.
+    func rebuild(arriving: Bool = false) {
         trays.values.forEach { $0.panel.orderOut(nil) }
         trays = [:]
         let notched = state.notchScreen
@@ -70,11 +84,21 @@ final class ScreenTrays {
             let layout = TrayLayout(screen: screen.frame, menuBarHeight: screen.frame.maxY - screen.visibleFrame.maxY,
                                     hardwareNotch: hardware)
             let tray = Tray(model: TrayModel(layout: layout), screen: screen)
-            tray.panel.ignoresMouseEvents = false
-            tray.panel.contentView = NSHostingView(rootView: TrayView(model: tray.model, state: state, dock: dock))
+            // Takes clicks only while the pointer is on the tray (`trackHover`): it covers every stage.
+            tray.panel.ignoresMouseEvents = true
+            tray.panel.setFrame(panelFrame(layout), display: false)
+            tray.panel.contentView = NSHostingView(rootView: Hopping(hop: tray.hop, content: TrayView(
+                model: tray.model, state: state, dock: dock)))
             trays[id] = tray
         }
         refresh()
+        guard arriving else { return }
+        for tray in trays.values where tray.model.stage != .hidden {
+            let layout = tray.model.layout
+            let model = tray.model
+            tray.hop.arrive(height: { layout.frame(for: model.stage).height },
+                            rises: { !layout.isBeside(model.stage) }, springy: { layout.hardwareNotch == nil })
+        }
     }
 
     /// A window dragged by its title bar is at `pointer` (nil: the drag ended). Opens the tray of the display
@@ -122,7 +146,11 @@ final class ScreenTrays {
             let layout = tray.model.layout
             let zone = tray.hovering ? layout.frame(for: .open).insetBy(dx: -12, dy: -12)
                                      : layout.frame(for: max(tray.model.stage, .dot)).insetBy(dx: -2, dy: -2)
-            let hovering = !tray.model.apps.isEmpty && zone.contains(pointer)
+            // The whole hardware notch counts, though the resting tab is narrower.
+            let behind = layout.hardwareNotch?.insetBy(dx: -2, dy: -2) ?? .null
+            let hovering = !tray.model.apps.isEmpty && (zone.contains(pointer) || behind.contains(pointer))
+            let onTray = tray.model.stage != .hidden && layout.frame(for: tray.model.stage).insetBy(dx: -4, dy: -4).contains(pointer)
+            if tray.panel.ignoresMouseEvents == onTray { tray.panel.ignoresMouseEvents = !onTray }
             if hovering != tray.hovering {
                 tray.hovering = hovering
                 changed = true
@@ -131,29 +159,24 @@ final class ScreenTrays {
         if changed { refresh() }
     }
 
-    /// Grows the panel before the tray animates bigger, and shrinks it (or hides it) once it has animated smaller,
-    /// so it never covers more of the menu bar and title bars than the tray does.
+    /// Shows the panel before the tray animates in, and hides it once it has animated away. The panel's frame never
+    /// changes (it covers every stage), so the tray can be anywhere in it: beside a hardware notch resting, below
+    /// it open.
     private func show(_ stage: TrayStage, _ tray: Tray) {
         let old = tray.model.stage
         guard stage != old else { return }
-        if stage > old {
-            tray.panel.setFrame(panelFrame(stage, tray), display: true)
-            tray.panel.orderFrontRegardless()
-        }
+        if old == .hidden { tray.panel.orderFrontRegardless() }
         tray.model.stage = stage
-        guard stage < old else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, tray.model.stage == stage else { return }
-            if stage == .hidden {
-                tray.panel.orderOut(nil)
-            } else {
-                tray.panel.setFrame(panelFrame(stage, tray), display: true)
-            }
+        guard stage == .hidden else { return }
+        tray.panel.ignoresMouseEvents = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if tray.model.stage == .hidden { tray.panel.orderOut(nil) }
         }
     }
 
-    private func panelFrame(_ stage: TrayStage, _ tray: Tray) -> CGRect {
-        let frame = tray.model.layout.frame(for: max(stage, .dot))
+    /// Every stage's frame (`TrayLayout.bounds`), with room for the glow at the sides and below.
+    private func panelFrame(_ layout: TrayLayout) -> CGRect {
+        let frame = layout.bounds
         let room = Self.glowRoom
         return CGRect(x: frame.minX - room, y: frame.minY - room, width: frame.width + 2 * room, height: frame.height + room)
     }

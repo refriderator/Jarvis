@@ -80,6 +80,25 @@ final class VideoController {
         }
     }
 
+    private func isFullScreen(_ window: ForeignWindow) -> Bool {
+        windows.frame(of: window).map { VideoDock.fillsScreen($0, screens: NSScreen.screens.map(\.frame)) } ?? false
+    }
+
+    /// The notch moved to another display (already laid out there): a held video goes with it. Tucked, straight to
+    /// its tucked spot beside the new notch (nothing else moved it: keeping it in its spot leaves a tucked video
+    /// alone). Otherwise under the clamshell, which opens once it's in its spot there.
+    func displayChanged() {
+        guard state.video.held, let window else { return }
+        if state.video.tucked {
+            guard let spot = state.layout.tuckedVideoFrame else { return }
+            frameOnScreen = windows.setFrame(spot, of: window) ?? spot
+            return
+        }
+        holeOpen = false
+        state.updateVideo { $0.covered = true }
+        settle(after: 0.05)
+    }
+
     /// The held video went full screen (on any display, tucked or not): it's the browser's again, as if dragged
     /// out. Returns true if it let go.
     @discardableResult private func letGoIfFullScreen(_ frame: CGRect? = nil) -> Bool {
@@ -93,7 +112,8 @@ final class VideoController {
     }
 
     func refresh() {
-        let found = windows.pictureInPicture()
+        // A video playing full screen isn't offered: holding it would pull it out of full screen, then let go.
+        let found = windows.pictureInPicture().flatMap { isFullScreen($0) ? nil : $0 }
         if state.video.available != (found != nil) {
             log.debug("video: \(found == nil ? "gone" : "found one in pid \(found!.pid)")")
             state.updateVideo { $0.available = found != nil }
@@ -179,7 +199,9 @@ final class VideoController {
             return
         }
         // Not while a window is dragged in: Large would replace the drop box with the video. It comes back after.
+        // Nor tucked: Large is just the video's hole, so with the video tucked away it was an empty frame.
         let wanted = state.dock.keep == .large && state.notch.mode == .open && state.dock.dragging == nil
+            && !state.video.tucked
         // Compared with where it's heading, not where it is, so hovering in and out mid-switch ends up right.
         guard wanted != (pendingTheater ?? state.video.theater) else { return }
         guard wanted != state.video.theater else {
@@ -326,6 +348,8 @@ final class VideoController {
 
     private func tuck() {
         guard state.video.held, !state.video.tucked, state.layout.miniVideoFrame != nil else { return }
+        // Large is for a video that shows; left on, it locked the dropdown open (empty) when a drag opened it.
+        if state.dock.keep == .large { state.updateDock { $0.keep = $0.keepInfo } }
         let start = state.layout.frame(for: .idle)
         state.updateVideo { $0.covered = true }
         move += 1
@@ -459,7 +483,8 @@ final class VideoController {
     // MARK: Holding and letting go
 
     func hold() {
-        guard !state.video.held, let found = windows.pictureInPicture(), let frame = windows.frame(of: found) else { return }
+        guard !state.video.held, let found = windows.pictureInPicture(), let frame = windows.frame(of: found),
+              !isFullScreen(found) else { return }
         window = found
         original = frame
         frameOnScreen = frame

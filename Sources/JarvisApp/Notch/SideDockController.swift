@@ -40,6 +40,8 @@ final class SideDockController {
     private let windows: WindowControlling
     private let peek: SidePeek
     private var tracker: Timer?
+    /// Ticks of `tracker`, so held windows are checked (`prune`) only every so often.
+    private var ticks = 0
     private var observers: [NSObjectProtocol] = []
     /// The cards showing: which display and side.
     private var showing: (display: CGDirectDisplayID?, side: ScreenSide)?
@@ -106,15 +108,22 @@ final class SideDockController {
     func window(_ id: UUID) -> ForeignWindow? { parked.first { $0.id == id }?.window }
     func isPopped(_ window: ForeignWindow) -> Bool { popped.map { id in parked.first { $0.id == id.id }?.window == window } ?? false }
 
-    /// Slides a window off `side` of its display (if free), or the nearer free one. False when it can't be held
-    /// there (another display on both sides, or this desktop already holds `SideDock.maxWindows` and `makeRoom`
-    /// is off).
+    /// Slides a window off `side` of its display (if free), or the nearer free one. `onto` another display (it was
+    /// put in the notch, or a tray, there), it goes to that display's side instead, as if it had been at the same
+    /// place relative to that display's middle; letting go still puts it back where it really was. False when it
+    /// can't be held there (another display on both sides, or this desktop already holds `SideDock.maxWindows`
+    /// and `makeRoom` is off).
     @discardableResult
-    func park(_ window: ForeignWindow, makeRoom: Bool, side wanted: ScreenSide? = nil) -> Bool {
+    func park(_ window: ForeignWindow, makeRoom: Bool, side wanted: ScreenSide? = nil, onto: NSScreen? = nil) -> Bool {
         guard !isParked(window) else { return true }
-        guard let frame = windows.frame(of: window), let screen = Self.screen(for: frame) else { return false }
+        guard let original = windows.frame(of: window), let from = Self.screen(for: original) else { return false }
+        let screen = onto ?? from
+        let moving = screen != from
+        let frame = moving ? original.offsetBy(dx: screen.frame.midX - from.frame.midX, dy: screen.frame.midY - from.frame.midY)
+                           : original
         let free = SideDock.freeSides(of: screen.frame, others: NSScreen.screens.map(\.frame))
-        let desktop = Desktops.of(window.element).first ?? Desktops.active(on: screen.displayID)
+        // Moved to another display, it joins the desktop showing there.
+        let desktop = (moving ? nil : Desktops.of(window.element).first) ?? Desktops.active(on: screen.displayID)
         homes.removeAll { windows.frame(of: $0.window) == nil }
         // Back where it waited last, if that's on this display and desktop.
         let home = homes.first { $0.window == window && $0.display == screen.displayID && $0.desktop == desktop
@@ -133,7 +142,7 @@ final class SideDockController {
         let got = windows.setFrame(target, of: window) ?? target
         let name = NSRunningApplication(processIdentifier: window.pid)?.localizedName ?? "?"
         log.debug("park: \(name, privacy: .public) on the \(side.rawValue, privacy: .public), got x \(got.minX) for \(target.minX)")
-        let item = ParkedWindow(window: window, original: frame, side: side, display: screen.displayID,
+        let item = ParkedWindow(window: window, original: original, side: side, display: screen.displayID,
                                 desktop: desktop, parkedAt: got)
         // Before the card now at its old place on that side, or after the side's last.
         let onSide = cards(display: item.display, side: side, desktop: desktop)
@@ -194,7 +203,11 @@ final class SideDockController {
     }
 
     private func track() {
-        prune()
+        // Asking every held window where it is goes to each app (Accessibility) and waits for it, on the main
+        // thread: 30 times a second, a busy app made the cards stutter as they slid out. Twice a second is plenty to
+        // notice one brought back another way, and not while the cards are out or being dragged.
+        ticks += 1
+        if ticks % 15 == 0, showing == nil, dragging == nil { prune() }
         guard !parked.isEmpty else {
             tracker?.invalidate()
             tracker = nil

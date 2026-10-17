@@ -112,7 +112,7 @@ public final class AppState {
         layout.tabSlots = dock.tabSlots + (video.available && !video.held ? 1 : 0)
         // Keep holds the dropdown open, whatever the tab.
         notch.locked = dock.keep != .off || video.switching
-        layout.theater = video.held && video.theater
+        layout.theater = video.held && video.theater && !video.tucked
         layout.tallForTheater = video.held && video.tallForTheater
         // Nothing can be clicked mid-drag, so a dragged window (or file) opens it on hover.
         notch.openOnHover = dock.dragging != nil || dock.tab == .finder
