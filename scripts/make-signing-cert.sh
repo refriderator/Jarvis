@@ -26,7 +26,10 @@ CFG
 openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$TMP/cfg" -extensions ext \
   -keyout "$TMP/key.pem" -out "$TMP/cert.pem" 2>/dev/null
 PASS="$(openssl rand -hex 16)"
-openssl pkcs12 -export -legacy -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
+# OpenSSL 3 needs -legacy for a file Keychain can read; macOS's own LibreSSL doesn't know the flag (and doesn't need it).
+LEGACY=""
+openssl pkcs12 -help 2>&1 | grep -q -- "-legacy" && LEGACY="-legacy"
+openssl pkcs12 -export $LEGACY -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
   -out "$TMP/id.p12" -passout "pass:$PASS" 2>/dev/null
 security import "$TMP/id.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P "$PASS" -T /usr/bin/codesign
 echo "Created \"$NAME\". The first signing may ask to use the key: choose Always Allow."

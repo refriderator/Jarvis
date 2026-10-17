@@ -32,7 +32,8 @@ esac
 
 step "[2/4] Making a signing certificate (first time only)"
 echo "This keeps Jarvis's permissions (microphone, calendar...) when you update it later."
-scripts/make-signing-cert.sh
+# Without it Jarvis still builds (signed ad hoc); macOS just asks for its permissions again after each update.
+scripts/make-signing-cert.sh || echo "Couldn't make the certificate; carrying on without it."
 echo "If a window asks to let codesign use the key, enter your Mac password and choose Always Allow."
 
 step "[3/4] Building Jarvis (a few minutes the first time)"
