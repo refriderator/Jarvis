@@ -65,6 +65,7 @@ final class NotchController {
         let notice = NoticePanel(state: state)
         self.notice = notice
         dock.onFileDrag = { [weak self] point in self?.fileDrag(at: point) }
+        dock.onWindowDrag = { [weak video] in video?.sync() }
         dock.boxToScreen = { [panel] rect in
             // SwiftUI's global frame is measured from the panel's top-left corner, y going down.
             CGRect(x: panel.frame.minX + rect.minX, y: panel.frame.maxY - rect.maxY, width: rect.width, height: rect.height)

@@ -161,7 +161,8 @@ final class VideoController {
             if state.video.theater { state.updateVideo { $0.theater = false } }
             return
         }
-        let wanted = state.dock.keep == .large && state.notch.mode == .open
+        // Not while a window is dragged in: Large would replace the drop box with the video. It comes back after.
+        let wanted = state.dock.keep == .large && state.notch.mode == .open && state.dock.dragging == nil
         // Compared with where it's heading, not where it is, so hovering in and out mid-switch ends up right.
         guard wanted != (pendingTheater ?? state.video.theater) else { return }
         guard wanted != state.video.theater else {

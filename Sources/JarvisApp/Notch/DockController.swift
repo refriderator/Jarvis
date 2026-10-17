@@ -24,6 +24,8 @@ final class DockController {
 
     /// A file is being dragged out of the Finder tab, and where the pointer is; set by `NotchController`.
     @ObservationIgnored var onFileDrag: (CGPoint?) -> Void = { _ in }
+    /// A window drag started or ended (the drop box came or went); set by `NotchController`.
+    @ObservationIgnored var onWindowDrag: () -> Void = {}
     /// Whether a point is over another display's tray (lighting it up; nil clears it); set by `ScreenTrays`.
     @ObservationIgnored var overTray: (CGPoint?) -> Bool = { _ in false }
     /// The dragged window is over another display's tray.
@@ -172,6 +174,7 @@ final class DockController {
         if opener.update(pointer: pointer, catchIn: state.layout.notch, releaseOutside: state.layout.frame(for: .open)) {
             log.debug("drag: dropdown \(self.opener.caught ? "opens" : "closes")")
             state.updateDock { $0.dragging = opener.caught ? kind : nil; $0.catching = false }
+            onWindowDrag()
             if opener.caught {
                 state.send(.summon)
             } else {
@@ -195,6 +198,7 @@ final class DockController {
         stopTracking()
         if let edge { dropAtEdge(edge) }
         state.updateDock { $0.dragging = nil; $0.catching = false }
+        if opened { onWindowDrag() }
         if let window {
             kind(of: window) == .folder ? holdFolder(window) : holdApp(window)
         } else if opened, !state.layout.hotZone(for: .open).contains(NSEvent.mouseLocation), !state.notch.locked {
