@@ -18,6 +18,19 @@ extension DockController {
         return "Put \(app.localizedName ?? "the window") in the dock."
     }
 
+    /// Sets every window of the named app that is showing on this desktop aside, for the typed "dock X" command.
+    func dockAllWindows(of appName: String) throws -> String {
+        guard AccessibilityAccess.isTrusted else {
+            throw ChatError("Moving windows needs Accessibility access: System Settings › Privacy & Security › Accessibility.")
+        }
+        guard let app = Self.running(appName) else { throw ChatError("\(appName) isn't open.") }
+        let name = app.localizedName ?? appName
+        let shown = windows.visibleWindows().filter { $0.pid == app.processIdentifier && AXWindowControl.isStandard($0) }
+        guard !shown.isEmpty else { throw ChatError("\(name) has no open window to put in the dock.") }
+        shown.forEach(setAside)
+        return shown.count == 1 ? "Put \(name) in the dock." : "Put \(shown.count) \(name) windows in the dock."
+    }
+
     /// Brings the named app's window back out of the strip (or off its side), as clicking it does.
     func undockWindow(of appName: String) throws -> String {
         let held = state.dock.shownApps

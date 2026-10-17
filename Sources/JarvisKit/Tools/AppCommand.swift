@@ -8,6 +8,8 @@ public enum AppCommand: Equatable, Sendable {
     /// `app` is nil when the request didn't name one: the music app that is already open is used.
     case play(query: String, app: String?)
     case control(Control)
+    /// "dock Safari": every window of the app goes into the notch's dock.
+    case dock(app: String)
 
     public enum Control: Equatable, Sendable {
         case pause, resume, next, previous
@@ -29,6 +31,14 @@ public enum AppCommand: Equatable, Sendable {
             let name = words[0].trimmingCharacters(in: .whitespaces)
             // App names are short; a longer phrase is a request with more in it ("open my notion and tell me what's due").
             return name.split(separator: " ").count <= 4 ? .open(app: name) : nil
+        }
+        if let words = capture(#"dock\s+(?:all\s+)?(?:the\s+)?([\w.&+' -]{1,40}?)(?:\s+(?:app|windows?))?"#, in: text) {
+            let name = words[0].trimmingCharacters(in: .whitespaces)
+            // "dock this" means the window in front, which the model's dock tool knows how to find.
+            let front = #"^(?:this|it|that|here|window|everything|all)$"#
+            if name.range(of: front, options: [.regularExpression, .caseInsensitive]) == nil, name.split(separator: " ").count <= 4 {
+                return .dock(app: name)
+            }
         }
         let object = #"(?:\s+(?:the\s+)?(?:music|song|track|playback|spotify|apple music))?"#
         if capture(#"(?:pause|stop)"# + object, in: text) != nil, !text.lowercased().contains("stop") || mentionsMusic(text) {

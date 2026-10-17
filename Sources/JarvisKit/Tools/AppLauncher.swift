@@ -48,12 +48,15 @@ public final class InstalledApps: AppFinder {
     }
 }
 
-/// Runs `AppCommand`s: opens apps, controls and plays music. A nil reply means "not mine, ask a brain".
+/// Runs `AppCommand`s: opens apps, docks their windows, controls and plays music. A nil reply means "not mine, ask a brain".
 @MainActor
 public final class AppLauncher {
     private let finder: AppFinder
     private let player: NowPlayingSource
     private let runningMusic: @MainActor () -> [MusicPlayer]
+    /// Puts all of an app's windows in the notch's dock and says what happened, or throws why not. The notch is made
+    /// after this, so the app fills it in; until then "dock X" is left to a brain.
+    public var dockApp: ((String) throws -> String)?
 
     public init(finder: AppFinder = InstalledApps(), player: NowPlayingSource,
                 runningMusic: @escaping @MainActor () -> [MusicPlayer] = AppLauncher.runningMusicApps) {
@@ -90,6 +93,9 @@ public final class AppLauncher {
             // ("start" and "run" are too loose to claim.)
             return text.range(of: #"\b(open|launch)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
                 ? "I couldn't find an app called \(name)." : nil
+        case .dock(let name):
+            guard let dockApp else { return nil }
+            do { return try dockApp(name) } catch { return error.localizedDescription }
         case .control(let control):
             guard let target = runningMusic().first else { return nil }
             switch control {

@@ -37,7 +37,8 @@ final class NotchController {
     private let closeAnimationSeconds = 0.9
 
     /// The local brain's Mac tools reach the window dock and Quick Dock through here.
-    func connect(_ mac: MacControls) {
+    func connect(_ mac: MacControls, launcher: AppLauncher) {
+        launcher.dockApp = { [weak self] app in try self?.dock.dockAllWindows(of: app) ?? "" }
         mac.dockWindow = { [weak self] app in try self?.dock.dockWindow(of: app) ?? "" }
         mac.undockWindow = { [weak self] app in try self?.dock.undockWindow(of: app) ?? "" }
         mac.setQuickDock = { [state] on in

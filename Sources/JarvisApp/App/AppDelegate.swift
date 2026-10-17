@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.state.send(.dismiss)
             self?.showSettings()
         }, cancelTimer: { [weak self] in self?.timers.cancel($0) })
-        notch?.connect(mac)
+        notch?.connect(mac, launcher: launcher)
         // Claude Code's calls to the Mac tools arrive here, while Claude's access allows them.
         let relay = ToolRelay.Server(kit: { tools.cloudMacKit() ?? CombinedKit([]) },
                                      allowed: { state.settings.claudeAccess != .none })

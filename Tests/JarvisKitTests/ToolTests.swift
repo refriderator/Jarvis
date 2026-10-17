@@ -87,11 +87,13 @@ struct AppCommandTests {
         #expect(AppCommand.parse("pause the music") == .control(.pause))
         #expect(AppCommand.parse("resume") == .control(.resume))
         #expect(AppCommand.parse("next song") == .control(.next))
+        #expect(AppCommand.parse("dock Safari") == .dock(app: "Safari"))
+        #expect(AppCommand.parse("please dock all the Chrome windows") == .dock(app: "Chrome"))
     }
 
     @Test func leavesLooseWordingToABrain() {
         for text in ["play it again", "let's play a game", "play devil's advocate", "play", "what's on my calendar",
-                     "open the thursday midterm in notion and tell me what's after it", "stop", "skip", "how do I open a pdf"] {
+                     "open the thursday midterm in notion and tell me what's after it", "stop", "skip", "how do I open a pdf", "dock this", "dock", "dock it please", "what is a dock"] {
             let parsed = AppCommand.parse(text)
             if case .open(let app)? = parsed {
                 #expect(app.split(separator: " ").count > 3 || text.contains("pdf"), "\(text)") // too long for a name; the app finder rejects it
