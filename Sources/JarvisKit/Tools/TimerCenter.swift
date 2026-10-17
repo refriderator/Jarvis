@@ -18,8 +18,6 @@ public final class TimerCenter {
         case .start(let seconds):
             start(seconds, now: now)
             return "Timer set for \(TimerCommand.describe(seconds))."
-        case .timersOnly:
-            return TimerCommand.timersOnlyReply
         case .cancelAll:
             let count = state.timers.count
             cancelAll()

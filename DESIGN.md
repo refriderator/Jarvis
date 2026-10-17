@@ -150,15 +150,22 @@ A skin is a small struct (colours, radius, glow, font, shoulders, material) in i
 in `SkinCatalog`. Shipped: Classic (default), Liquid Glass, Midnight, Arc, Pink, Terminal.
 
 ## Brain
-Most questions never reach the cloud:
-1. **Plain code** for fixed commands: timers and reminders (`TimerCommand`), "add X to my calendar tomorrow at 3pm",
-   "good morning" (`MorningBrief`), local weather, "dock Safari". Instant and free.
-2. **Local brain** (Apple on-device, built-in llama.cpp Qwen3, or Ollama) tries everything else, except anything
+Most questions never reach the cloud. Each tier does what it's good at, and code (never a model) decides, since a
+deciding model would add a call to every question:
+1. **Plain code** for fixed commands: timers (`TimerCommand`), reminders and alarms (`ReminderCommand`,
+   `AlarmCommand`), "run my X shortcut", "add X to my calendar tomorrow at 3pm", "good morning" (`MorningBrief`),
+   local weather, "dock Safari". Instant and free.
+2. **Apple Intelligence** for text already on screen (`TextJob`): summarizing the page in Safari or Chrome or the
+   selection, rewriting the selection (copied, not pasted over). Free, private, and what Apple's ~3B model is good
+   at; it reads only about 4k tokens, so long pages are summarized in parts, then together. Without it (before macOS
+   26, or switched off) the cloud brain gets the same text. Kept off the local Qwen so its training is only tools
+   and knowing when to escalate.
+3. **Local brain** (Apple on-device, built-in llama.cpp Qwen3, or Ollama) tries everything else, except anything
    recent (news, scores), the camera and Notion. A local model with tools is a *function bot*: it only acts through
    its tools (`LocalToolLoop`, one line of JSON per call) and answers `ESCALATE` for facts, explanations and writing.
    Every value is checked by the tool (timer 1 s–24 h, real calendar ids), so a wrong guess is refused, not acted on.
    Notion always goes to the cloud: the 8B model misread which item was next too often (10-17).
-3. **Cloud brain**: Claude Code (`claude -p`, the user's subscription, default), Codex (`codex exec`, the user's
+4. **Cloud brain**: Claude Code (`claude -p`, the user's subscription, default), Codex (`codex exec`, the user's
    ChatGPT plan), the Claude API, or any OpenAI-compatible endpoint. Claude Code runs stripped down (no MCP, skills or
    settings, empty folder): about 1k tokens a question instead of about 138k.
 - **Claude's access** (Connections: None / Tools / Full). Tools gives the cloud brain Jarvis's own tools; Claude Code
@@ -178,8 +185,13 @@ Most questions never reach the cloud:
 
 ## Tools
 `JarvisKit/Tools/`. `Toolbox` decides what a request needs.
-- **Timers and reminders**, no alarms: Jarvis can't wake a sleeping Mac or reach a phone, so an alarm request is
-  answered with what to say instead.
+- **Timers** live in Jarvis. **Reminders** go to the Reminders app (EventKit), so they sync and ring on the phone:
+  why Jarvis had stopped doing reminders with its own timers (10-17). **Alarms** go to the Clock app through the
+  user's "Jarvis Alarm" shortcut (Get Dates from Input › Create Alarm), run with `/usr/bin/shortcuts`: macOS has no
+  API for Clock alarms, but Shortcuts' Create Alarm action reaches it. Without the shortcut, Jarvis says how to make it.
+- **Siri**: a shortcut the user makes ("Ask Jarvis": Dictate Text › URL Encode › Open URLs) opens
+  `jarvis://ask?q=...` (`SiriLink`); the notch opens and the answer is spoken. Not App Intents: those need Xcode's
+  build step for Siri to find them, and Jarvis is a plain Swift package.
 - **Calendar**: list, add, change and delete single events by real ids; a delete must also name the event.
 - **Notion**: due items, search, read, append, tick, create. For Claude Code, Jarvis runs itself as the only MCP
   server (`Jarvis --notion-mcp`); the token goes through the environment, never the command line, a file or logs.
@@ -194,8 +206,8 @@ Sources/JarvisKit/      the logic, testable from the command line
   Browser/  Web tab tabs, bookmarks, passwords
   Dock/     held windows, side dock, video, Finder shelf, desktops
   Notch/    layout, state machine, ticker
-  Setup/    Mac advice, Claude Code and Codex setup, Updater
-  Tools/    timers, calendar, Notion, camera, maths, Mac tools, MCP server
+  Setup/    Mac advice, Claude Code and Codex setup, Updater, Siri link
+  Tools/    timers, reminders, alarms and shortcuts, screen text, calendar, Notion, camera, maths, Mac tools, MCP server
   Voice/    listener, speaker, hotkeys
   Skins/    Skin struct + one file per skin
   Widgets/  now playing, weather, battery, system stats, Today list

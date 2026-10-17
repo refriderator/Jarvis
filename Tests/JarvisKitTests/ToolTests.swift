@@ -12,12 +12,12 @@ struct TimerCommandTests {
         #expect(TimerCommand.parse("an hour timer please") == .start(seconds: 3600))
     }
 
-    @Test func alarmsAndRemindersGetOneAnswerHoweverWorded() {
+    @Test func remindersAndAlarmsAreNotTimers() {
         for text in ["set an alarm for 7 am", "wake me up at 6:30", "remind me in 20 minutes to call mom",
-                     "remind me at 8:45 pm", "can you set a reminder for tomorrow", "alarm in an hour"] {
-            #expect(TimerCommand.parse(text) == .timersOnly, "\(text)")
+                     "can you set a reminder for tomorrow", "cancel my alarm"] {
+            #expect(TimerCommand.parse(text) == nil, "\(text)")
         }
-        #expect(TimerCommand.parse("cancel my alarm") == .cancelAll, "cancelling is about the timers")
+        #expect(TimerCommand.parse("cancel the timer") == .cancelAll)
     }
 
     @Test func spokenLengthsForTheTool() {

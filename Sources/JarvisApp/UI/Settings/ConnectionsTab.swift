@@ -112,6 +112,7 @@ struct ConnectionsTab: View {
                 note("Make an integration at notion.so/my-integrations, paste its token here, then in Notion open each page "
                      + "Jarvis may use › ••• › Connections › add it. Notion requests go to Claude Code or the Claude API.")
                 PermissionRow(state: state, permission: .calendar)
+                PermissionRow(state: state, permission: .reminders)
                 CalendarAccountsRow()
             }
             }

@@ -18,6 +18,17 @@
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>Ask Jarvis</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>jarvis</string>
+            </array>
+        </dict>
+    </array>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>LSUIElement</key>
@@ -32,11 +43,13 @@
     <string>Jarvis uses the camera only when you ask it to look at something.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Jarvis reads and adds calendar events when you ask.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Jarvis adds reminders to the Reminders app when you ask, so they ring on your phone too.</string>
     <key>NSLocationUsageDescription</key>
     <string>Jarvis shows the weather where you are. Or set a city in Settings instead.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Jarvis shows the weather where you are. Or set a city in Settings instead.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Jarvis shows and controls what's playing in Music or Spotify, and reads which folder a Finder window you put in the notch shows.</string>
+    <string>Jarvis shows and controls what's playing in Music or Spotify, reads which folder a Finder window you put in the notch shows, and reads the page in Safari or Chrome when you ask for a summary.</string>
 </dict>
 </plist>

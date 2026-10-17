@@ -1,7 +1,7 @@
 import Foundation
 
-/// Jarvis's tools, and which ones a request needs. Plainly worded timers and calendar adds are done by
-/// code instantly; anything else goes to the local brain with tools (timers, calendar, Notion), then to
+/// Jarvis's tools, and which ones a request needs. Plainly worded timers, reminders, alarms, shortcuts and calendar
+/// adds are done by code instantly (`appleReply` for the ones that wait on Apple's apps); anything else goes to the local brain with tools (timers, calendar, Notion), then to
 /// the cloud brain if it can't. Schedule questions get the events as context; the camera needs the cloud.
 @MainActor
 public struct Toolbox {
@@ -16,10 +16,20 @@ public struct Toolbox {
     public var mac: MacControls?
     /// For the morning brief and weather questions, answered by code.
     public var weather: WeatherSource?
+    /// The Reminders app, for "remind me..." (`ReminderCommand`).
+    public var reminders: ReminderSource?
+    /// The user's shortcuts: "run my X shortcut", and alarms through "Jarvis Alarm".
+    public var shortcuts: ShortcutRunner?
+    /// The page or selected text in front, for Apple Intelligence's summaries and rewrites (`TextJob`).
+    public var screen: ScreenTextSource?
 
     public init(timers: TimerCenter? = nil, calendar: CalendarSource? = nil, camera: CameraSource? = nil,
                 apps: AppLauncher? = nil, mac: MacControls? = nil, weather: WeatherSource? = nil,
+                reminders: ReminderSource? = nil, shortcuts: ShortcutRunner? = nil, screen: ScreenTextSource? = nil,
                 notion: @escaping () -> ToolKit? = { nil }) {
+        self.reminders = reminders
+        self.shortcuts = shortcuts
+        self.screen = screen
         self.weather = weather
         self.timers = timers
         self.calendar = calendar

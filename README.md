@@ -43,7 +43,9 @@ Next time, open Jarvis from Applications.
 
 - **Click the notch** and type, or press the mic.
 - From any app: **Option-Space** to talk, **Option-Shift-Space** to type, **Esc** to stop it talking.
-- Try "set a timer for 10 minutes", "what's on tomorrow?", "good morning", "open Safari".
+- Try "set a timer for 10 minutes", "remind me at 7 pm to call mom", "what's on tomorrow?", "good morning",
+  "open Safari", "summarize this page".
+- Siri and alarms need a shortcut each, made once: **Settings › Features** shows how.
 - **Settings › Features** explains everything else.
 
 To put the notch on another display, pick it in the menu-bar menu under **Notch On**. Displays without a notch

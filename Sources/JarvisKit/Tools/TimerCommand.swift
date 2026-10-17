@@ -24,18 +24,13 @@ public struct JarvisTimer: Identifiable, Equatable, Sendable {
     }
 }
 
-/// The timer fast path: plain wording read by code, no model and no tokens. Jarvis sets timers only ("timer 10
-/// minutes", "an hour and a half timer"). Any alarm or reminder gets "I can only set a timer.", however it's worded:
-/// one answer is easier to trust than reminders that work for some wordings and not others (it can't wake a sleeping
-/// Mac or reach a phone either).
+/// The timer fast path: plain wording read by code, no model and no tokens ("timer 10 minutes", "an hour and a half
+/// timer"). Timers live in Jarvis; reminders go to the Reminders app (`ReminderCommand`) and alarms to the Clock app
+/// through a shortcut (`AlarmCommand`), since a Jarvis timer can't wake a sleeping Mac or reach a phone.
 public enum TimerCommand: Equatable, Sendable {
     case start(seconds: Int)
     case cancelAll
     case status
-    /// An alarm or reminder: "set an alarm", "wake me up at 7", "remind me to call mom".
-    case timersOnly
-
-    public static let timersOnlyReply = "I can only set a timer."
 
     private static let numberWords = ["a": 1.0, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
                                       "seven": 7, "eight": 8, "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20,
@@ -46,15 +41,11 @@ public enum TimerCommand: Equatable, Sendable {
 
     public static func parse(_ text: String) -> TimerCommand? {
         let lower = text.lowercased()
-        let other = lower.range(of: #"\b(alarms?|wake me|remind(ers?)?)\b"#, options: .regularExpression) != nil
-        let timer = lower.range(of: #"\b(timers?|countdown)\b"#, options: .regularExpression) != nil
-        guard timer || other else { return nil }
-        // Cancelling or asking about one is about the timers, whatever it's called.
+        guard lower.range(of: #"\b(timers?|countdown)\b"#, options: .regularExpression) != nil else { return nil }
         if lower.range(of: #"\b(cancel|stop|clear|delete|remove)\b"#, options: .regularExpression) != nil { return .cancelAll }
         if lower.range(of: #"\b(how (much|long)|time left|remaining|left on)\b"#, options: .regularExpression) != nil {
             return .status
         }
-        if other { return .timersOnly }
         return seconds(in: lower).map { .start(seconds: $0) }
     }
 

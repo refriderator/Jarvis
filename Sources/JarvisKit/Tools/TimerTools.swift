@@ -1,6 +1,7 @@
 import Foundation
 
-/// Timers as tools for the local brain (and the cloud one). Timers only, as everywhere in Jarvis. The length is
+/// Timers as tools for the local brain (and the cloud one). Reminders and alarms are code (`ReminderCommand`,
+/// `AlarmCommand`), never a model's job. The length is
 /// given as said and read by `TimerCommand.seconds(in:)`: the model copies words instead of working out seconds.
 public struct TimerTools: ToolKit {
     public let name = "timer"
@@ -11,9 +12,7 @@ public struct TimerTools: ToolKit {
         self.center = center
     }
 
-    public var instructions: String {
-        "Set, list and cancel timers. Timers only: for an alarm or a reminder, answer \"\(TimerCommand.timersOnlyReply)\""
-    }
+    public var instructions: String { "Set, list and cancel timers." }
 
     public var definitions: [ToolDefinition] {
         [

@@ -51,6 +51,13 @@ struct CaptionView: View {
                         .font(.caption2)
                         .opacity(0.45)
                 }
+                // Who answered: Jarvis (code or its local model), Siri (Apple's apps), Apple Intelligence or Claude.
+                if let answerer = Answerer.of(turn) {
+                    Label(answerer.text, systemImage: answerer.icon)
+                        .font(.caption2)
+                        .opacity(0.5)
+                        .lineLimit(1)
+                }
                 Spacer()
                 if turn.cloud, turn.answer != nil, !turn.failed {
                     summaryButton

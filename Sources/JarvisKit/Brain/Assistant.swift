@@ -1,18 +1,20 @@
 import Foundation
 
-/// Answers a question the way Jarvis Private did: plain code for timers and new calendar events,
-/// the local brain for small questions, Claude (or the chosen cloud brain) for big ones, Notion,
-/// the camera, or when local is unsure.
+/// Answers a question in tiers, each doing what it's good at: plain code for timers, reminders, alarms, apps and new
+/// calendar events; Apple Intelligence for text on screen (summaries, rewrites); the local brain for small questions
+/// and Mac tools; Claude (or the chosen cloud brain) for big ones, Notion, the camera, or when local is unsure.
 @MainActor
 public final class Assistant {
     /// Earlier turns newer than this are sent along so follow-ups make sense.
     public static let followUpWindow: TimeInterval = 5 * 60
     public static let maxFollowUpTurns = 3
 
-    private let state: AppState
+    let state: AppState
     private let makeLocal: @MainActor (Settings) -> ChatProvider?
-    private let makeCloud: @MainActor (Settings) -> ChatProvider?
-    private let tools: Toolbox
+    let makeCloud: @MainActor (Settings) -> ChatProvider?
+    /// Apple's on-device model for text on screen (`TextJob`), or nil when this Mac doesn't have it.
+    let makeOnDevice: @MainActor () -> ChatProvider?
+    let tools: Toolbox
     private let log: TurnLog?
 
     /// The factories read settings and secrets at ask time, so changes apply to the next question.
@@ -20,6 +22,7 @@ public final class Assistant {
     public init(state: AppState,
                 makeLocal: @escaping @MainActor (Settings) -> ChatProvider?,
                 makeCloud: @escaping @MainActor (Settings) -> ChatProvider?,
+                makeOnDevice: @escaping @MainActor () -> ChatProvider? = { nil },
                 tools: Toolbox = .none, log: TurnLog? = nil) {
         self.state = state
         self.makeLocal = { settings in
@@ -29,6 +32,10 @@ public final class Assistant {
         self.makeCloud = { settings in
             let cloud = makeCloud(settings)
             return log?.recording(cloud) ?? cloud
+        }
+        self.makeOnDevice = {
+            let model = makeOnDevice()
+            return log?.recording(model) ?? model
         }
         self.tools = tools
         self.log = log
@@ -102,6 +109,11 @@ public final class Assistant {
             finish(instant.text, source: instant.source, tokens: 0)
             return
         }
+        if let done = await tools.appleReply(text) {
+            finish(done.text, source: done.source, tokens: 0)
+            return
+        }
+        if await answeredOnScreen(text) { return }
         let needs = tools.needs(text)
         // Photos and Notion go to the cloud brain: a small local model misread Notion too often.
         if needs.photo || needs.notion { local = nil }
@@ -136,6 +148,11 @@ public final class Assistant {
             finish(Toolbox.offerText(app: app), source: "Apps", tokens: 0)
             return
         }
+        await toCloud(earlier + [question], note: note, needs: needs, namedClaude: decision.namedClaude)
+    }
+
+    /// Hands a question to the cloud brain, after the token-saving check.
+    func toCloud(_ history: [ChatMessage], note: String, needs: Toolbox.CloudNeeds, namedClaude: Bool = false) async {
         guard let cloud = makeCloud(state.settings) else {
             fail("No cloud brain is set up. Choose one in Settings › Connections.")
             return
@@ -144,12 +161,12 @@ public final class Assistant {
             fail("\(cloud.label) can't use Notion or the camera. Pick Claude Code or a Claude API key in Settings › Connections.")
             return
         }
-        if state.settings.askBeforeCloud && !decision.namedClaude {
-            waiting = WaitingForCloud(cloud: cloud, history: earlier + [question], note: note, needs: needs)
+        if state.settings.askBeforeCloud && !namedClaude {
+            waiting = WaitingForCloud(cloud: cloud, history: history, note: note, needs: needs)
             state.setAwaitingCloud(true, source: cloud.label + note)
             return
         }
-        await askCloud(cloud, history: earlier + [question], note: note, needs: needs)
+        await askCloud(cloud, history: history, note: note, needs: needs)
     }
 
     /// The morning brief, or just the weather. Nil when there's no weather to give, so a brain answers instead.
@@ -197,12 +214,12 @@ public final class Assistant {
         }
     }
 
-    private func finish(_ text: String, source: String, tokens: Int, cloud: Bool = false) {
+    func finish(_ text: String, source: String, tokens: Int, cloud: Bool = false) {
         state.finishTurn(text, source: source, tokens: tokens, cloud: cloud)
         log?.finish(answer: text, source: source)
     }
 
-    private func fail(_ reason: String) {
+    func fail(_ reason: String) {
         state.failTurn(reason)
         log?.finish(answer: nil, source: nil, failure: reason)
     }

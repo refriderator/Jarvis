@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var timers = TimerCenter(state: state)
     /// Set once launched; the menu reads it.
     private(set) var voice: VoiceSession?
+    private var assistant: Assistant?
     private lazy var downloader = ModelDownloader(state: state)
     private var notch: NotchController?
     private var relay: ToolRelay.Server?
@@ -34,10 +35,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return "Opened \(opened)."
         }
         let tools = Toolbox(timers: timers, calendar: calendar, camera: MacCamera(), apps: launcher, mac: mac, weather: weather,
+                            reminders: EventKitReminders(), shortcuts: MacShortcuts(), screen: MacScreenText(),
                             notion: { state.secret(.notionToken).map { NotionTools(token: $0) } })
         let assistant = Assistant(state: state, makeLocal: { Brains.local($0, engine: self.engine) },
-                                  makeCloud: { Brains.cloud($0, secret: state.secret) }, tools: tools,
-                                  log: TurnLog { state.settings.logConversations })
+                                  makeCloud: { Brains.cloud($0, secret: state.secret) },
+                                  makeOnDevice: { AppleOnDeviceProvider.isAvailable ? AppleOnDeviceProvider() : nil },
+                                  tools: tools, log: TurnLog { state.settings.logConversations })
+        self.assistant = assistant
         let voice = VoiceSession(state: state, assistant: assistant, listener: SpeechListener(),
                                  speaker: SystemSpeaker(), hotkeys: hotkeys)
         voice.start()
@@ -65,6 +69,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+
+    /// `jarvis://ask?q=...`: a question from Siri (the "Ask Jarvis" shortcut) or any other app. The notch opens and the
+    /// answer is spoken, as if it had been said to Jarvis.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let question = SiriLink.question(in: url) else { continue }
+            state.send(.summon)
+            assistant?.ask(question, spoken: true)
+        }
     }
 
     /// Launching Jarvis again while it runs opens Settings, so it stays

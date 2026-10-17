@@ -4,7 +4,7 @@ import Foundation
 import Speech
 
 public enum Permission: String, Sendable, CaseIterable, Identifiable {
-    case microphone, speech, camera, calendar
+    case microphone, speech, camera, calendar, reminders
 
     public var id: String { rawValue }
 
@@ -14,6 +14,7 @@ public enum Permission: String, Sendable, CaseIterable, Identifiable {
         case .speech: "Speech Recognition"
         case .camera: "Camera"
         case .calendar: "Calendar"
+        case .reminders: "Reminders"
         }
     }
 
@@ -23,6 +24,7 @@ public enum Permission: String, Sendable, CaseIterable, Identifiable {
         case .speech: "Turns what you say into text, on this Mac."
         case .camera: "Only when you ask Jarvis to look at something."
         case .calendar: "Lets Jarvis read and add events."
+        case .reminders: "Puts reminders in the Reminders app, so they ring on your phone too."
         }
     }
 
@@ -33,6 +35,7 @@ public enum Permission: String, Sendable, CaseIterable, Identifiable {
         case .speech: "Privacy_SpeechRecognition"
         case .camera: "Privacy_Camera"
         case .calendar: "Privacy_Calendars"
+        case .reminders: "Privacy_Reminders"
         }
         return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")
     }
@@ -67,6 +70,12 @@ public struct SystemPermissions: PermissionChecking {
             case .fullAccess: .granted
             default: .denied
             }
+        case .reminders:
+            switch EKEventStore.authorizationStatus(for: .reminder) {
+            case .notDetermined: .notAsked
+            case .fullAccess: .granted
+            default: .denied
+            }
         }
     }
 
@@ -79,6 +88,7 @@ public struct SystemPermissions: PermissionChecking {
                 SFSpeechRecognizer.requestAuthorization { _ in done.resume() }
             }
         case .calendar: _ = try? await EKEventStore().requestFullAccessToEvents()
+        case .reminders: _ = try? await EKEventStore().requestFullAccessToReminders()
         }
         return status(permission)
     }
