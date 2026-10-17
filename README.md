@@ -26,6 +26,10 @@ Stuck?
 - A window offers to install **Command Line Tools**? Click **Install**, wait for it to finish, then start again from step 2.
 - Step 2 says `already exists`? You already have it. Skip to step 3.
 - Asked to let *codesign* use a key? Type your Mac password and click **Always Allow**.
+- Step 3 stops at `[3/4]` with `dyld` and `Symbol not found` (mentioning `swiftpm`)? Apple's Command Line Tools
+  are broken, usually from an old copy left over after a macOS update. Reinstall them: paste
+  `sudo rm -rf /Library/Developer/CommandLineTools` and press **Return** (type your Mac password; nothing shows
+  as you type), then `xcode-select --install` and click **Install**. When it's done, do step 3 again.
 - Don't double-click the installer from a downloaded ZIP: macOS blocks it. Use the steps above.
 
 Next time, open Jarvis from Applications.
