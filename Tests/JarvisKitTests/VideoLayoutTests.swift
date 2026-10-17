@@ -143,4 +143,14 @@ struct VideoLayoutTests {
         #expect(apps.minY >= video.maxY - 1, "so the icons never sit on the video or its icon")
         #expect(tab.contains(video))
     }
+
+    @Test func aVideoFillingAnyDisplayIsFullScreen() {
+        let main = CGRect(x: 0, y: 0, width: 2080, height: 1170)
+        let external = CGRect(x: -2560, y: -300, width: 2560, height: 1440)
+        let screens = [main, external]
+        #expect(VideoDock.fillsScreen(main, screens: screens), "full screen on the Mac's own display")
+        #expect(VideoDock.fillsScreen(external.insetBy(dx: 0, dy: 40), screens: screens), "on the external one, menu bar and all")
+        #expect(!VideoDock.fillsScreen(CGRect(x: 800, y: 900, width: 480, height: 270), screens: screens), "Large is not full screen")
+        #expect(!VideoDock.fillsScreen(CGRect(x: 900, y: 1040, width: 220, height: 124), screens: screens), "nor the mini player")
+    }
 }

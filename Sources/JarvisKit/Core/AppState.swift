@@ -111,7 +111,7 @@ public final class AppState {
         // The tab beside the closed notch: held apps, and a video button while a loose video floats.
         layout.tabSlots = dock.tabSlots + (video.available && !video.held ? 1 : 0)
         // Keep holds the dropdown open, whatever the tab.
-        notch.locked = dock.keep != .off
+        notch.locked = dock.keep != .off || video.switching
         layout.theater = video.held && video.theater
         layout.tallForTheater = video.held && video.tallForTheater
         // Nothing can be clicked mid-drag, so a dragged window (or file) opens it on hover.

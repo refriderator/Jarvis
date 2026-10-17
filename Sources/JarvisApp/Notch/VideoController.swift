@@ -73,8 +73,23 @@ final class VideoController {
             MainActor.assumeIsolated { self?.refresh() }
         }
         spotCheck = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.keepInSpot() }
+            MainActor.assumeIsolated {
+                guard let self, !self.letGoIfFullScreen() else { return }
+                self.keepInSpot()
+            }
         }
+    }
+
+    /// The held video went full screen (on any display, tucked or not): it's the browser's again, as if dragged
+    /// out. Returns true if it let go.
+    @discardableResult private func letGoIfFullScreen(_ frame: CGRect? = nil) -> Bool {
+        guard state.video.held, let window, let now = frame ?? windows.frame(of: window),
+              VideoDock.fillsScreen(now, screens: NSScreen.screens.map(\.frame)) else { return false }
+        log.debug("video: went full screen, letting go")
+        forget()
+        // Even with Keep Info on: the dropdown would hang over the video just made full screen.
+        if state.notch.mode != .idle { state.send(.dismiss) }
+        return true
     }
 
     func refresh() {
@@ -144,6 +159,8 @@ final class VideoController {
 
     /// A switch into or out of theater that's under way.
     @ObservationIgnored private var pendingTheater: Bool?
+    /// Counts switches, so only the latest one's end lets the dropdown close again (`VideoDock.switching`).
+    @ObservationIgnored private var switches = 0
     @ObservationIgnored private var wasOpen = false
     /// The hole over the video is cut. It stays cut while the clamshell closes over the video (filling it at once
     /// made solid skins look blocked with no animation) and opens again as the clamshell parts.
@@ -168,13 +185,15 @@ final class VideoController {
         guard wanted != state.video.theater else {
             // Back to what's showing before the switch happened: call it off and just reopen.
             pendingTheater = nil
-            state.updateVideo { $0.tallForTheater = false }
+            state.updateVideo { $0.tallForTheater = false; $0.switching = false }
             panelHidden = false
             settle(after: 0.05)
             return
         }
         pendingTheater = wanted
-        state.updateVideo { $0.covered = true }
+        switches += 1
+        let thisSwitch = switches
+        state.updateVideo { $0.covered = true; $0.switching = true }
         panelHidden = true
         // Either way the dropdown first deepens to Large's depth (still full width), so the video and its
         // clamshell stay inside it while they move. Into Large: the video moves to its big spot, then the dropdown
@@ -212,7 +231,10 @@ final class VideoController {
             state.updateVideo { $0.tallForTheater = false }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + settled + 0.15) { [weak self] in
-            guard let self, current == move else { return }
+            guard let self else { return }
+            // Even if a later move took over the steps above: a lock left on kept the dropdown open for good.
+            if thisSwitch == switches, state.video.switching { state.updateVideo { $0.switching = false } }
+            guard current == move else { return }
             panelHidden = false
         }
     }
@@ -471,7 +493,9 @@ final class VideoController {
         watcher?.invalidate()
         watcher = nil
         pressed = nil
-        state.updateVideo { $0.held = false; $0.covered = true; $0.tucked = false; $0.theater = false }
+        state.updateVideo { $0.held = false; $0.covered = true; $0.tucked = false; $0.theater = false; $0.switching = false }
+        // Large is only for a held video: left on, it kept the dropdown locked open with nothing to show.
+        if state.dock.keep == .large { state.updateDock { $0.keep = $0.keepInfo } }
     }
 
     // MARK: Following the notch
@@ -544,7 +568,7 @@ final class VideoController {
     /// The video landed at `got` (asked for `spot`): a browser that won't go that small is remembered, and the
     /// hole follows macOS nudging it afterwards.
     private func placed(_ landed: CGRect, in spot: CGRect) {
-        guard let window else { return }
+        guard let window, !letGoIfFullScreen(landed) else { return }
         var got = landed
         if got.width > spot.width + 1 || got.height > spot.height + 1 {
             // The browser won't make it that small: remember its smallest. The notch makes room for it at once
@@ -626,13 +650,7 @@ final class VideoController {
         if wasHeld {
             // Dragged out of the notch: it's the browser's again, wherever it's dropped.
             if moved {
-                window = nil
-                original = nil
-                frameOnScreen = nil
-                holeOpen = false
-                pointerOverVideo = false
-                stopWatching()
-                state.updateVideo { $0.held = false; $0.covered = true; $0.theater = false }
+                forget()
             } else if !down {
                 stopWatching()
             }

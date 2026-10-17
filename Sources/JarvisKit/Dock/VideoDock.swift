@@ -13,6 +13,9 @@ public struct VideoDock: Sendable, Equatable {
     public var theater = false
     /// Mid-switch between the full dropdown and Large (see `NotchLayout.tallForTheater`).
     public var tallForTheater = false
+    /// Switching into or out of Large, start to finish: the dropdown stays open meanwhile. Leaving Large drops the
+    /// Keep lock at once, and the pointer can be outside Large's small frame, which closed it to the mini player.
+    public var switching = false
     /// Tucked away (↑ on the mini player): the video shrinks as small as the browser allows, right under the
     /// hardware notch, and the notch deepens just enough to cover it (macOS won't let a window go off-screen).
     /// Hovering the notch, or the video icon in the side tab, brings the mini player back.
@@ -29,4 +32,14 @@ public struct VideoDock: Sendable, Equatable {
     public var minimum: CGSize?
 
     public init() {}
+
+    /// The browser made its video full screen (Picture in Picture's own button, or the green one): the window
+    /// covers most of a display. The notch lets go of it then, rather than pulling it back into its spot and
+    /// taking the full-screen size for the smallest the browser allows.
+    public static func fillsScreen(_ frame: CGRect, screens: [CGRect]) -> Bool {
+        screens.contains { screen in
+            let covered = frame.intersection(screen)
+            return !covered.isNull && covered.width >= screen.width * 0.8 && covered.height >= screen.height * 0.8
+        }
+    }
 }
