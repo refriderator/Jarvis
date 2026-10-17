@@ -4,20 +4,29 @@ An assistant that lives in your Mac's notch. Talk or type to it.
 
 ## Start Jarvis
 
+Needs macOS 15.6 or newer. Do these in order; each time, paste the line, then press **Return** and wait for it to finish.
+
 1. Open **Terminal**: press **⌘ Space**, type `Terminal`, press **Return**.
-2. Copy this line, paste it into Terminal, press **Return**:
+2. Paste this and press **Return**. It downloads Jarvis:
 
    ```sh
-   git clone https://github.com/refriderator/Jarvis.git ~/Jarvis && sh ~/Jarvis/"Install Jarvis.command"
+   git clone https://github.com/refriderator/Jarvis.git ~/Jarvis
    ```
 
-3. Wait a few minutes. Jarvis opens by itself and walks you through setup.
+3. Paste this and press **Return**. It builds and installs Jarvis (a few minutes, so be patient):
 
-Needs macOS 15.6 or newer.
+   ```sh
+   sh ~/Jarvis/"Install Jarvis.command"
+   ```
 
-- A window offers to install **Command Line Tools**? Click **Install**, wait, then do step 2 again.
+4. Jarvis opens by itself and walks you through setup.
+
+Stuck?
+
+- A window offers to install **Command Line Tools**? Click **Install**, wait for it to finish, then start again from step 2.
+- Step 2 says `already exists`? You already have it. Skip to step 3.
 - Asked to let *codesign* use a key? Type your Mac password and click **Always Allow**.
-- Downloaded the ZIP? macOS blocks double-clicking the installer. Use step 2 instead.
+- Don't double-click the installer from a downloaded ZIP: macOS blocks it. Use the steps above.
 
 Next time, open Jarvis from Applications.
 
@@ -33,8 +42,18 @@ get a bar that shows the time, the song and more (Settings › Display).
 
 ## Update
 
+Open Terminal, then paste these one at a time, pressing **Return** after each:
+
 ```sh
-cd ~/Jarvis && git pull && sh "Install Jarvis.command"
+cd ~/Jarvis
+```
+
+```sh
+git pull
+```
+
+```sh
+sh "Install Jarvis.command"
 ```
 
 Your settings are kept.
