@@ -51,7 +51,11 @@ get a bar that shows the time, the song and more (Settings › Display).
 
 ## Update
 
-Open Terminal, then paste these one at a time, pressing **Return** after each:
+In Jarvis: **Settings › General › Update Jarvis…**. A Terminal window opens, downloads the latest version and
+rebuilds it (a few minutes); Jarvis quits and opens again when it's done.
+
+No Update button (copies installed before it existed)? Do it by hand once; after that the button is there. Open
+Terminal, then paste these one at a time, pressing **Return** after each:
 
 ```sh
 cd ~/Jarvis

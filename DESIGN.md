@@ -1,201 +1,178 @@
 # Jarvis — design
 
-A menu-bar Mac assistant that lives in the notch. Talk or type; it answers with voice and captions and can use your calendar and Notion. Clean, small, easy to fix.
+A Mac assistant that lives in the notch. Talk or type; it answers with captions and voice, and can use your calendar,
+Notion, timers and windows. Clean, small, easy to fix.
 
-Status: **M5 done** (notch shell, settings, welcome, text chat, voice, tools), plus the dock, video, Finder and Web tabs.
+This file holds what the code can't say: why things are the way they are, what was tried and dropped, and limits that
+come from macOS. Sizes, timings and animation steps live in the code (`NotchLayout`, `NotchMotion`, …), not here.
+
+Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the window dock, video, Finder, Monitor and Web tabs.
 
 ## Decisions
 | Topic | Decision |
 |---|---|
-| Language | Swift (SwiftUI + AppKit for the notch). Edit in VS Code, build with Xcode. |
-| Speech to text | Apple's speech recognition, on device. No bundled model. |
-| Voice | Installed Apple voices incl. Premium/Enhanced, and Personal Voice if the user made one. Behind a `Speaker` protocol. |
-| Brain | Local first, cloud for the rest (see Brain). Local: Apple's on-device model or Ollama. Cloud: the user's Claude Code (their subscription), Claude API key, or any OpenAI-compatible endpoint. Keys in Keychain. |
-| Calendar | macOS EventKit first (includes Google Calendar if added to Calendar.app). Direct Google API later. |
-| Notion | User-pasted integration token first, OAuth later. |
-| Tokens | Tokens only, never money. Per reply, session and day. One toggle hides it. |
-| Distribution | GitHub, MIT. Build from source; notarized .app on Releases if an Apple Developer account exists. |
-| macOS | 15.6 and newer: one build, checking at runtime (`#available`) for what needs 26: Apple's on-device model (unavailable before) and Liquid Glass (`View.glass`, frosted material before). 15.6 is the oldest Apple's Swift 6.2 tools install on, which the installer needs. |
+| Language | Swift, SwiftUI + AppKit for the notch. A Swift package, no Xcode project (see Build). |
+| macOS | 15.6 and newer, one build. 15.6 is the oldest that Apple's Swift 6.2 tools install on. What needs 26 (Apple's on-device model, Liquid Glass) is checked at runtime with `#available`. |
+| Speech to text | Apple's speech recognition, on device when the language allows. No bundled model. |
+| Voice | Installed Apple voices (incl. Premium/Enhanced and Personal Voice), behind a `Speaker` protocol. |
+| Brain | Local first, cloud for the rest (see Brain). Keys in Keychain only. |
+| Calendar | EventKit, so any calendar added to macOS (Google, iCloud, Exchange) counts. A direct Google sign-in would need a registered Google Cloud OAuth app. |
+| Notion | User-pasted integration token, in Keychain. |
+| Money | Never shown anywhere. Tokens are still counted (`TokenMeter`) but no longer shown (10-17). |
+| Distribution | GitHub, MIT, built from source. Notarized releases would need Xcode and a paid developer account. |
 
-## Screens
-- **Welcome:** first run, three parts. 1 Meet: what it does (six highlights) and what to call it (`AssistantName`: warns about
-  "Claude", other assistants' names, command words, very short/long names, symbols). 2 Set up, four short steps: permissions,
-  look (skin, open trigger, launch at login), voice, brains (Connections without training/services). 3 Tips, pointing to
-  Settings › Features (a searchable guide, one entry per feature). The name is used in the cloud persona and the input field,
-  and a leading "Hey <name>," is dropped from questions; local prompts never name it (the trained model is unaffected).
-- **Brain setup** (Connections tab, also the welcome's last step): "This Mac" reads chip, memory and free disk and suggests brains (`MacAdvice`): 24 GB+ built-in Qwen3 8B, 16 GB Qwen3 4B, 8 GB Apple Intelligence (a built-in model would slow other apps), Intel Claude only; warns about low disk, Apple Intelligence being off, battery use, no notch. Claude Code can be installed (Anthropic's installer) and signed in (one Terminal window for the browser sign-in) from inside Jarvis (`ClaudeCodeSetup`); it needs a Pro or Max plan.
-- **Main panel:** text field + mic button, captions above/below.
-- **Notch dropdown:** timers, quick toggles.
-- **Settings window:** tabs below.
+## Notch
+- States **idle → peek → open**. Open on hover, or on click with hover only peeking (Settings › General).
+- Closes when the pointer leaves, a click lands outside, or Esc. While a caption is up, the pointer leaving doesn't close it.
+- Sits on the Mac's own display unless another is picked (kept by vendor, model and serial, so it comes back to the
+  right monitor). Displays without a notch get a pill showing the **ticker** (time, music, battery, weather, next
+  event, one line at a time; Settings › Display).
+- **Captions:** the answer replaces the Today list under the time, stays a reading pause, then closes. A reply never
+  opens a new dropdown, except when you closed it mid-answer: then it pops back once. Click a caption to keep it.
+  Cloud answers have **Summarize** (`Summary`: a few points, a formula, a small chart, as JSON from the cloud brain).
+- **Tabs** (left of the notch): Today, Finder, Monitor, Web. Clicking the showing tab folds it away.
+  - **Finder** (`FolderShelfView`): Jarvis's own folder view, starting at Downloads. Drag in and out like Finder
+    (`FileDragSource`: SwiftUI's own drag only ever offered a copy, never a move). Its sidebar pins are Jarvis's own
+    (`finderPins`) because Finder's sidebar list is private to Finder. Search uses Spotlight.
+  - **Monitor**: CPU, memory, network, compressed memory and swap, from the same counters Activity Monitor reads,
+    only while the tab is showing. Network is numbers, not a graph: a graph scaled to the peak made blips look huge.
+  - **Web** (`BrowserController`): a small WebKit browser. The user agent says Safari, or sites call it out of date.
+    Full screen is Jarvis's own (`PageFullscreen`): the system's took over the whole screen, and reshaping the
+    dropdown around the video broke YouTube's full-window mode. Passwords (`PasswordHelper`) run in their own
+    content world so page scripts can't see them, fill only on https for the exact host, and save to the login Keychain.
+- **Keep** holds the dropdown open (and with a video held, makes the video Large).
+- **Mission Control** (`MissionControlWatch`): Jarvis fades out while it's open. macOS doesn't announce it, so Jarvis
+  checks the Dock's accessibility tree for the group with identifier "mc" (a full-screen Dock window also shows
+  when the Dock is merely shown, so that test was dropped).
 
-## Notch behavior
-States: **idle -> peek -> open**.
-- Setting `openMode = hover`: hovering the notch opens the dropdown.
-- Setting `openMode = click`: hovering only grows the notch a little ("hey, I'm here"). It opens only when the grown part is clicked.
-- Displays without a notch (and Macs without one): small pill at top center. Closed, it shows the **ticker** (`Ticker`, `TickerView`): time, date, what's playing, battery, weather, next event, one line at a time fading into the next (SF Rounded), each optional and shown for 2 to 30 s (Settings › Display). Lines with nothing to say are skipped; none picked leaves a plain bar. Weather and the calendar are refreshed every 5 minutes while it shows. It stays while a video is tucked beside it and gives way to a held video's mini player.
-- On the Mac's own display (built-in screen) unless another is picked (menu-bar menu › Notch On, or Settings › Display), even with an external monitor set as main. The pick is kept by the display's vendor, model and serial; unplugged, the notch goes back to the Mac's own until it returns, and falls back to the main display when the lid is closed. The display it left gets the strip for held windows. Settings and Welcome open on the display the pointer is on.
-- Motion: opening is one flowing move. The narrow tab eases down out of the notch (0.28 s, no overshoot); 0.11 s in, before it has landed, it starts widening with a soft spring while the text fades in with a slight settle from the top. Closing is smooth with no bounce: it narrows, then retracts slowly up into the notch. Curves live in `NotchMotion`.
-- However it opened, it closes when the pointer leaves, a click lands outside, or Esc.
-- **Caption:** a question, a mic press or a timer starts the caption. The "TODAY" list fades out, the music slides up and the caption (live words while listening, then the answer) takes the room under it. While it's up, the pointer leaving does not close the panel. When it's finished (answered, and spoken if spoken) it stays a reading pause (2 s after speech, 3 s plus 0.05 s per character otherwise, up to 15 s), then the panel closes; if the pointer is on it, it waits until the pointer leaves. A reply never opens a new dropdown, with one exception: if you close the dropdown while a question is still being answered, the caption pops back up when the answer is ready (silently if typed), stays a reading pause, and goes away unless you click it to keep it.
-- **Summarize:** a cloud (Claude) answer's caption has a Summarize chip. It asks the cloud brain for JSON (`Summary`): 2–5 short points with an SF Symbol each, the key formula if there is one, and a small bar chart if the answer compares numbers. The caption is kept and drops further (up to 420 pt) to fit; the chip then switches between the summary and the full answer. Clicking it is the yes, so token saving doesn't ask; its tokens count toward the meter and the turn.
-- **Last response tab:** for a minute after an answer, a "Last response" tab sits next to the settings icon; clicking it shows that answer again as a kept caption (silent).
-- **Keeping it:** click the caption (while it's being answered or after) to keep it on screen in full (it grows to fit the answer, up to 300 pt) until you click outside or press Esc; click it again to let it go.
-- **Today list:** events whose time has passed are greyed out (all-day items and date-only deadlines never are).
-- **Glass skin:** a lighter tint (22% black over the glass) so the screen behind shows through more.
-- **Tabs** (left of the notch; the video, "Last response" and Settings are on the right): Today, Finder, Monitor. The chosen one shows its name, the others just their icon. They pick what shows under the time and weather. Only Today takes the keyboard when the notch opens; on the others, click the field to type.
-  - **Today:** calendar events, what's due, and timers (the old "TODAY" list).
-  - **Finder** (`FolderShelfView`): a folder Jarvis draws itself, starting at Downloads. Drop files on it to move them in (copy from another disk, or with Option; never overwrites, adds " 2"), drag them out anywhere (`FileDragSource`: like Finder's own files, so the destination picks move on the same disk or copy across disks or with Option; SwiftUI's drag only ever offered a copy), double-click to open a file or go into a folder, the arrow goes up. While a file is dragged out, the panel only takes the drop over the notch itself, so a window just below gets it as soon as the pointer is on it; and the open panel's see-through margin never takes clicks. It follows changes on disk. Drag its title off the notch to open it as a Finder window there. A sidebar like Finder's lists Favorites (Applications, Desktop, Documents, Downloads, home), folders you pinned (drop a folder on the sidebar, or right-click › Add to Sidebar; right-click a pin to remove it), and iCloud Drive. Finder's own sidebar list is private to Finder, so the pins are Jarvis's own (`finderPins` in Settings). **Keep** (right, before Settings; on this tab or while a video is held) cycles off → on → Large (Large only with a video held). On keeps the dropdown open, and it never closes mid-drag. Keep is one button: with a video held, keeping means Large (just the video, 270 pt tall); otherwise it keeps the dropdown open. Each switch plays behind the clamshell (it closes, the notch reshapes, the video moves, it opens with the flash). Into Large the video moves to its big spot first (under the shut clamshell, inside the still-wide dropdown) and the dropdown narrows after; out of Large the dropdown grows first. The Video button is pinned 12 pt right of the hardware notch; Keep sits just left of Settings and moves over as Large appears. The dropdown is at least 740 pt wide holding a video (640 when one is only offered), so they never meet. Hovering a held video shows small tabs in its middle that size it, one step at a time: ↑ smaller (full dropdown → Large → mini player → tucked), ↓ bigger (tucked never, mini player → Large, Large → full dropdown; the full dropdown has only ↑). Tucking plays in steps with the video always behind the skin: the clamshell closes over the mini player, the cover widens right over the spot right of the notch (the video shrinks there behind it to the browser's smallest, Firefox 59×33), then shrinks in from the left and rises into the side tab's place, and only then does the video icon appear. It can't sit higher: macOS keeps windows below the menu bar. Tucked, the tab's video icon sits 3 pt above the middle of the part below the notch; on Liquid Glass it's on a soft dark oval that hides most of the video showing through (a rim of its glow still shows). Tucked, hovering the tab pops it out a little; clicking it brings the mini player back, which stays until ↑ again. Hovering the mini player no longer opens the notch; the hardware notch still does. The clamshell closes over the open hole and only then is the hole filled (filling it at once made solid skins look blocked with no animation). The notch's corners around a video, mini and Large alike, are concentric with the video's (hole radius + inset + margin); the mini player's margin is 3 pt. Liquid Glass's clamshell is dark grey. When the video moves under it (into or out of Large, into the mini spot on closing, into the dropdown on opening), the clamshell never jumps: its far corner reaches out until it spans both spots (0.13 s), the video moves underneath, then its near corner draws in onto the new spot (0.13 s). The video is never outside it, so this plays on Liquid Glass too; the notch waits for it before shrinking or narrowing, so it never pokes out past the dropdown's edge. "Video" gives the video back half again as big (420 pt to 45% of the screen wide) in the bottom-right corner.
-  - **Monitor** (`SystemStats`, `MonitorFeed`, `MonitorView`): CPU and memory with a graph of the last minute each; network as numbers (download, upload; a graph scaled to the minute's peak made tiny blips look huge); and what macOS has offloaded from RAM: compressed in place, and swap on disk (`sysctl vm.swapusage`). Jarvis reads the same counters Activity Monitor does, once a second, only while the tab is on screen.
-- **Holding windows** (`JarvisKit/Dock/`, `DockController`; Settings › General "Hold windows in the notch", needs Accessibility): drag a standard window by its title bar (a press in its top 56 pt; anything lower, like dragging a file out of a window, never counts) to the notch (Picture in Picture, panels and dialogs are ignored). The dropdown opens (even with the click trigger) with a dashed drop box in the tab's place, and anywhere over the dropdown counts as on the box: its app's icon fades in, with a trackpad click; move away from the dropdown and it's an empty box again. Two hysteresis zones (`DockCatch`): the dropdown opens at the notch and only closes once the pointer is well outside the whole dropdown; the box catches within 16 pt and lets go past 40 pt, so nothing flickers on an edge.
-  - **Finder window:** let go on the box and it closes; its folder opens in the Finder tab (asked from Finder with AppleScript; Accessibility doesn't say). The Finder tab's search field searches the whole Mac by name (Spotlight); results replace the folder until it's cleared or a folder among them is opened.
-  - **Any other window, like Stage Manager's strip (no previews):** let go on the box and it's set aside (minimized). Minimized windows come back on the desktop they left, so each desktop has its own strip: only that desktop's apps show, up to 6, and windows brought back another way (the Dock, ⌘-Tab) or closed drop out. Once the dropdown closes, a tab in the skin's colours springs out beside the closed notch with their icons; open, they sit next to the time, two side by side, and past two in stacks of two (columns of two, three columns for six). Two windows of the same app carry a number. Click an icon and it leaves the strip and fills the desktop in front, the windows already here left where they are; Option-click swaps instead (with Quick Dock on, every click does): the window in front (another app's ordinary window on this desktop) is set aside in its place. With a video held, the open strip is two across and three down, fixed to that width so it never overlaps the time or the video. Drag an icon out and the window comes with the pointer. The tab's border runs only along its outer edges (no seam against the notch), and it sits against the closed notch's edge, however wide.
-  - **Other displays** (`ScreenTrays`, `TrayView`, `TrayLayout`): every display but the notch's has a tray for the windows held on the desktop it's showing, 6 per desktop like the notch, in the skin. Holding nothing, there's no tray; holding windows, a small notch with a white dot hangs from the middle of the menu bar; hovered, it opens down to a 2 × 3 grid of their icons with dashed places for the rest. Drag a window by its title bar to the top middle of that display (280 pt either side, 150 pt down) and the grid opens; let go over it or near it (50 pt to the sides, 60 pt below) and the window is held there, slid off that display's side or minimized. On a display with a hardware notch (the Mac's own, while the notch is on another), the same grid slides out sideways from behind the hardware notch (its two rows share the notch's height), shows only a dot past it while holding windows, and hides behind it when empty. Whether a seventh window is refused is counted on the dragged window's own desktop, not the notch's.
-  - Everything is drawn in Jarvis's own panel, on every desktop and above every window, so it follows the notch and Mission Control leaves it alone. (A first version held the real window under a hole in the notch; macOS owns real windows' desktops, stacking and Mission Control, so it glitched on all three and couldn't be scaled down.)
-- **Video** (`VideoController`, `VideoDock`): while a browser has a Picture in Picture video floating (Firefox's is "Picture-in-Picture", Chrome's "Picture in Picture"; found by floating window, then its title through Accessibility, since the WindowServer's titles need Screen Recording), the tab beside the closed notch shows a video button and the open dropdown a "Video" button drawn exactly like the tabs' chosen segment (`TabSegment`, shared with Keep), starting 10 pt right of the hardware notch, with "Video" sliding out beside its icon. Either one, or dragging the video onto the notch, holds it. Open, it sits on the right of the time row (the weather moves under the time) and the tab's content folds away; click a tab to show its content, and the chosen tab again to fold it away. Closed, the notch grows down and 18 pt wider each side around it as a mini player in the skin's colours, with a 6 pt margin. The video's real frame is read again 0.15 s after placing it, since macOS can nudge a window that close to the menu bar. A browser that won't shrink its video that far is remembered, and the notch makes room for its smallest size. The video is the browser's real window: it floats on every desktop, below Jarvis's panel, and shows through a hole in the notch cut to the frame it actually got (browsers keep their own aspect ratio), with a thin edge around it only in the open dropdown, there once the clamshell has gone (the hole and edge are worked out from the shape actually drawn, shoulders included); the hole is inset 2 pt with 16 pt corners, inside any video window rounded up to 18 pt. Clicks over it go through to it. Holding a video, the panel never takes the keyboard on its own (giving it back meant hiding the panel for a frame, a flash on the mini player). Every change plays in separate steps: a cover in two halves closes over it like a clamshell, the notch grows or shrinks, the video moves, and the clamshell parts again with an old-TV flash (a glowing dot stretches into a bright line tapering to sharp points along the seam), so it never shows outside the notch and nothing see-through shows. Drag the video away to let go of it; "Video" again gives it back in the screen's bottom-right corner at the size it had. The Video button is grey like an unchosen tab until it holds a video, then in the skin's accent. Floating windows are never caught as window drags. (The notch reacts only to its mode really changing: observation sees the whole `notch` value, and reacting to its other fields made the cover close every time it opened.)
-- **Holding on the sides** (`SideDock`, `SideDockController`, `SidePeek`): a held window (dropped on the notch's dropdown, let go at the left or right edge of a display after dragging it by its title bar, or set aside by Quick Dock) slides off that edge (the nearer one when it came from the notch) with 1 pt left showing, at its own size, still a real window on its own desktop. Sides with another display against them aren't used; a window wide enough that its middle would sit nearer another display (macOS then gives it that display's desktop, and neither edge would show its card) is parked narrower, and gets its size back when it comes out; with neither side free it's minimized into the notch's strip as before. The strip shows the side-held windows' icons too (after the minimized ones), so the notch always says what it holds. Clicking one lets go of it and fills the desktop with it (with Quick Dock, swapping with the window in front); dragging one out lets go of it and puts it straight into the pointer, held by its title bar like a minimized one. Its card on the edge is what pops it out to use from the side. Up to 6 per desktop, shared with the strip (sides and minimized together). Point at the edge (between the menu bar and the Dock) and cards for that side's windows slide out, top to bottom: a live picture of each window if Jarvis may record the screen (Settings has the button; never asked for on its own), otherwise its app's icon and title on the skin's background. Click a card: with Quick Dock on it swaps with the window in front (it fills the desktop, that one goes to the side); with it off it pops out 10 pt from its edge over the window in front (at about System Settings' size, 720 × 640 pt, the first time; after that at whatever size it had when it last went back, so resizing it there sticks; shrunk to fit a small display; an app whose minimum size is bigger is moved so all of it is on screen). Whether the pointer is on it follows the window's real edges, read again while it's out, so a resized (or too big) window doesn't slide back while the pointer is still on it, in front and focused to use there, and slides back as soon as the pointer leaves it (24 pt past its edge for 0.3 s, no button down), giving the keyboard back to the app in front, which never moved. ⌘-Tab to a held app does the same as clicking its card. Drag a card to move it: it lifts into the pointer (drawn above everything, held where it was grabbed, tilted a little), and the cards of the side under the pointer (the half of whichever display it's on, the other side if that one isn't free) show with an empty dashed slot where it would land; let go and it's put there, its window moving off that edge (or that display) if the side changed. The cards stay out where it landed. Dragged into the middle third of a display instead, the cards go and a dashed outline shows in the middle at the window's size (shrunk to fit); let go there and the window is let go of, put where the outline was, in front. The same works for a popped-out window dragged by its title bar: once it's moving, the outline shows while the pointer is in the middle third, and letting go there takes it out of the dock. A window going back to the side (a Quick Dock swap) returns to the side and place among the cards it last waited in (`homes`), so windows keep their side and the cards their order. A popped-out window is let go of by dragging only when the press was on its title bar (its top 56 pt) and the size didn't change; dragging an edge resizes it. The edge it came from stays free (the window sits 10 pt in): touching it sends the window back to its slot and brings that side's cards out. An app coming forward without you choosing it (the keyboard handed back, an app quitting) never pops out a held window. Stage Manager's shrunk live windows can't be done: macOS has no public way to scale another app's window, and raising one without activating its app doesn't put it above the app in front, so the cards are Jarvis's own. A held window moved back on screen some other way, or closed, drops out. Let go of one (the × on a hovered card, or Let Go in a card's or a strip icon's right-click menu) and it goes back where it was before it was held, in front; a minimized one is un-minimized and put on screen. Quitting Jarvis puts every held window back where it was.
-- **Restoring held apps** brings the window back at its own size, in front and focused (centre stage). Focusing used to switch desktops (macOS follows an app's main window); since the strip only shows windows from the desktop you're on, they come back here and focusing is safe. The genie is the Mac's own minimize animation and is kept. Desktops are read (never changed) through SkyLight's private calls (`Desktops`), since macOS has no public API for them.
-- **Web tab** (`BrowserController`, `BrowserView`, `StartPage`; model `JarvisKit/Browser/BrowserTabs`): a small browser in the dropdown
-  (WebKit). Back and forward; tabs with an x, dragged to reorder (a link that opens a new window opens a new tab); an address field (hovered, a small arrow at its left end opens the page in the default browser)
-  (address or Google search); a size toggle between the Finder tab's depth and Large's video depth (`NotchLayout.browserLarge`).
-  A tab with no page is the start page: bookmarks as round symbols (site icon, else first letter; name on hover), + to add one
-  with a name, drag onto another to reorder, right-click to remove; saved in Settings (`bookmarks`). Pages stay loaded while Jarvis runs; cookies are kept like a
-  normal browser. Keep holds it open like Finder. Clicking a page takes the keyboard (`PanelWebView`). Pages are zoomed to lay out 1100 pt wide (⌘−/⌘=/⌘0 adjust);
-  the user agent says Safari (the installed version), or sites call it out of date. The system's full screen is off,
-  so a video's full-screen button fills the page (YouTube's own full-window mode). Full screen is Jarvis's own (`PageFullscreen`, in the page's world): the
-  video's player fills the Web tab, the rest of the page hidden; asking again leaves. While a page is full screen, the closed
-  notch is a medium player (`NotchLayout.browserMini`, a little bigger than the mini player): view only, a hover drops it down
-  `mediumPeek`, a click opens the dropdown. Esc with Keep on still closes the dropdown, and pauses the Web tab's videos.
-  Esc on the medium player (watched for globally, since another app has the keyboard; needs Accessibility) pauses it and
-  leaves full screen, so the notch goes back to normal.
-  Tried and dropped: the system's full screen
-  (took over the whole screen), and reshaping the dropdown around a page-filling video (broke YouTube's full-window mode).
-  Passwords (`PasswordHelper`, `PasswordStore`): a script in its own content world (page scripts can't see or call it) sends a
-  sign-in on submit; Jarvis offers Save / Never for this site / Not now, and saves to the login Keychain (internet passwords).
-  It fills only on clicking into a sign-in field, only on https, only for the exact host WebKit says the frame is from.
-- **Mission Control** (`MissionControlWatch`): Jarvis fades out while it's open and back after. macOS doesn't announce it; while it's open the Dock's accessibility tree has a group with the identifier "mc", and at no other time, so that's checked 4 times a second. (A full-screen Dock window was tried first, but the Dock just being shown has one too.)
+## Holding windows
+`JarvisKit/Dock/`, `DockController`; needs Accessibility. Settings › General "Hold windows in the notch".
+- Drag a window by its title bar (the top 56 pt only, so dragging a file out of a window never counts) onto the notch
+  or a display's left/right edge. Catching uses hysteresis (`DockCatch`) so nothing flickers on an edge.
+- A Finder window dropped on the notch closes and opens its folder in the Finder tab (folder read via AppleScript;
+  Accessibility doesn't say).
+- Other windows slide off the nearer edge with 1 pt showing (`SideDock`), still real windows on their own desktop.
+  Pointing at the edge shows cards for them (`SidePeek`); click one to use it, it slides back when the pointer
+  leaves. Sides with another display against them aren't used; with no free side the window is minimized into the
+  notch's strip instead. Up to 6 per desktop.
+- Each desktop has its own strip. Other displays get a small tray from the menu bar (`ScreenTrays`).
+- Letting go puts a window back where it was; quitting Jarvis puts every held window back.
+- Why cards and not real shrunk windows: macOS has no public way to scale another app's window, and raising one
+  without activating its app doesn't put it above the app in front. The first version held the real window under a
+  hole in the notch; macOS owns real windows' desktops, stacking and Mission Control, so it glitched on all three.
+- Desktops are read (never changed) through SkyLight's private calls (`Desktops`); there is no public API.
+- **Quick Dock** (`QuickDock`): one window per desktop. The app you bring forward fills the desktop and the rest go to
+  the sides. Refuses to turn on past 7 windows on a desktop; changing desktops in Mission Control turns it off.
 
-- **Notch tabs as toggles:** clicking the tab that's showing (Today, Finder or Monitor) folds its content away, and clicking it again brings it back; the "Notch widgets" settings section is gone (the Today list is always on, weather uses this Mac's location unless a city was set before).
-- **Video polish:** "Keep Info" sits right beside Video so the controls are together. The clamshell reaches 1 pt past the video's edges (the hole and its edge are inside it), so no edge shows while it moves. A hover peek on the mini player only widens the notch; the video only moves on open, close, or its ↑ ↓ tabs. Grown down over a tucked video, the side tab is drawn in front of the notch with its outline running up its left side to the notch's bottom edge, so there's no double border. Tucking and un-tucking move one shape only (`TuckMorph`/`CoverShape`): a cover drawn exactly like the notch (shoulders, border, glow) takes over, the real notch changes underneath it in one frame, and the cover reshapes, each edge in its own step, into the side tab (or back into the mini player). The tab centres the video across its whole width, the icon over the part below the notch, and bounces down and back (stretched from its top) when the pointer arrives. The hole is measured from the notch's top centre, which doesn't move while the notch widens on a hover peek. Un-tucking, with a beat between the left side going out and the right side coming in, plays the tuck backwards: the icon goes, the tab drops to the mini player's depth, its left side goes out over the mini spot (the video moves behind it), its right side comes in, and the clamshell opens.
-- **Quick Dock** (Settings › General, and the menu-bar menu): one window at a time on each desktop of each display. While it's on, the menu-bar waveform has a small dot in its bottom-right corner (`MenuBarIcon`); the hardware notch left no room for a badge in the dropdown. Turned on, the window in front on every showing desktop fills it (the screen minus menu bar and Dock) and every other ordinary window there is set aside on the sides (see Holding on the sides); other desktops get the same the first time they're shown. It won't turn on with more than 7 windows on a showing desktop (the one in front plus a full strip of 6); a notice under the notch says why. From then on the app you bring forward (⌘-Tab, a click, or a window picked in Mission Control) fills its desktop and the rest on that display swap into the strip, up to 6 per desktop (past that the oldest stays minimized in the Dock and leaves the strip). Moving, adding or closing a desktop in Mission Control turns it off, with a "Quick Dock turned off" notice. Displays without the notch get their own strip: a small tab hanging from the middle of their menu bar with the icons set aside on the desktop they're showing, only while it holds something. Either way a window brought back is put on screen: clicked, it fills the desktop; otherwise centred (and shrunk to fit) if any of it was off its screen.
-- **Large ↔ full dropdown:** the dropdown first deepens to Large's depth at full width (`tallForTheater`), so the video and its clamshell never hang below it; then the video moves and the width changes, and the extra depth goes once it's settled. Going up to the full dropdown (from the mini player or Large) turns Keep Info off.
-## Keybinds
-- Recordable global shortcuts (Carbon hotkey API, no special permission), set in General: talk = ⌥Space, type = ⌥⇧Space. Talk is push-to-hold or toggle (Voice tab). The mic button and the menu's Talk also toggle.
-- Listening ends on its own after a pause in speech (`EndOfSpeech`, Voice tab: 1 / 1.3 / 2 s or never; it watches the transcript, not the audio, so room noise doesn't keep it open; gives up after 8 s of silence). Not while holding the talk key, where letting go is the signal.
-- Voice (`JarvisKit/Voice/`): `SpeechListener` (Apple speech, on-device when the language allows, chosen mic) shows the words live in the notch; `SystemSpeaker` reads answers aloud with the chosen voice and speed. Only spoken questions (and timers) are read aloud; typed ones are captioned only.
-- Optional: F5/mic key. On recent Macs F5 is the dictation key and sends a special system event; catching it needs an event tap (Input Monitoring permission) or a `hidutil` remap. Off by default.
-- Stop-talking key: registered only while Jarvis is speaking so it never steals a key (e.g. Esc) otherwise. Captions show a small chip with the bound key, e.g. `esc stop`.
+## Video
+`VideoController`, `VideoDock`. A browser's Picture in Picture window can be held by the notch: open, beside the time;
+closed, as a mini player in the notch; or tucked into a side tab.
+- The video is the browser's real window floating below Jarvis's panel, showing through a hole in the notch. The
+  hole is cut to the frame the browser actually gave it (browsers keep their own aspect ratio, and macOS can nudge a
+  window near the menu bar), so it's read back after placing. A browser that won't shrink that far is remembered.
+- Every change plays behind a **clamshell** cover: it closes, the notch reshapes, the video moves, it opens. That way
+  the video never shows outside the notch. Tucking morphs one shape (`TuckMorph`) rather than swapping views.
+- Tucked, the video has its own tab (`TuckedVideoTab`, `videoTabFrame`) and held apps keep theirs, notch-high, in
+  front of it along the top, where the tab is beside the notch and the video (below it) isn't. One shared tab put
+  the icons on top of the video icon. The video's tab cuts the apps' tab's shape out of itself, so Liquid Glass
+  doesn't show a darker band where two glass layers overlap.
+- PiP windows are found by floating window, then title through Accessibility: the WindowServer's titles need
+  Screen Recording.
+- Holding a video, the panel never takes the keyboard on its own: giving it back meant hiding the panel for a frame,
+  a visible flash.
+- The notch reacts only to its mode really changing; reacting to other fields of `notch` made the cover close every
+  time it opened.
 
-## Menu (slim, important only)
-Talk / Type · Stop talking · Skin (submenu to switch) · Timers · Settings... · Quit
+## Voice and keys
+- Global shortcuts (Carbon hotkey API, no permission needed): talk ⌥Space, type ⌥⇧Space, recordable in General.
+  Talk is hold or toggle.
+- Listening ends after a pause (`EndOfSpeech`), judged from the transcript, not the audio, so room noise doesn't keep
+  it open. Not while holding the talk key.
+- Only spoken questions (and timers) are read aloud; typed ones are captioned only.
+- The stop key is registered only while Jarvis is speaking, so it never steals a key like Esc otherwise.
 
-Jarvis must work fully with the menu icon hidden ("Show in menu bar" toggle). Runs as an accessory app (no Dock icon); notch and hotkeys keep working. Settings reachable via hotkey, the notch dropdown, or relaunching the app.
+## Menu
+Talk, Type, Quick Dock, Skin, Open the Notch On, Notch On, Timers, Settings, Quit. Jarvis must work fully with the menu
+icon hidden: it runs as an accessory app, and Settings is reachable from the notch, a hotkey, or relaunching.
 
-## Settings window
-- **General:** launch at login, menu icon on/off, notch open mode, hotkeys, Update. Update (`Updater`) opens a Terminal window that runs `git pull` and the installer in the folder this copy was built from (`bundle.sh` writes it into Info.plist as `JarvisSourceFolder`). It runs in Terminal, not in the background, because the installer quits Jarvis, and so errors and Apple's license prompt can be seen and answered.
-- **Voice:** voice, speed, mic device, push-to-hold vs toggle.
-- **Appearance:** skin picker, caption style.
-- **Connections:** Claude/chat key + model, Notion token, Calendar permission, later Google.
-
+## Settings
+Tabs: General, Voice, Appearance, Display, Connections, Features (a searchable guide, one entry per feature).
 Settings are one `Settings` struct saved to a file; the window is a form over it. New toggle = one field + one row.
+- **Update** (General, `Updater`): opens Terminal to `git pull` and run the installer in the folder this copy was built
+  from (`bundle.sh` writes it into Info.plist as `JarvisSourceFolder`). Terminal, not the background, because the
+  installer quits Jarvis, and so errors and Apple's license prompt can be seen and answered.
+- **Welcome:** first run. Meet (and name it; `AssistantName` warns about names like "Claude" or command words), set
+  up (permissions, look, voice, brains), tips.
+- **Brain setup** (Connections): `MacAdvice` reads chip, memory and disk and suggests brains. Claude Code and Codex
+  can be installed and signed in from Jarvis (`ClaudeCodeSetup`, `CodexSetup`); sign-in needs a browser, so it opens
+  one Terminal window.
 
 ## Skins
-A skin is a small struct (colors, corner radius, glow, font, shoulder, material) in its own file. Add a skin = add a file and register it. The menu's Skin submenu and the Appearance tab both read the same list.
-Shipped: Classic (black and greys, shoulders that curve into the menu bar, default), Liquid Glass (tinted glass, flat top, thin edge), Midnight, Arc (softened cyan), Pink (cute muted rose with a dark pink border and plum text), Terminal. Liquid Glass and Pink sit 1 pt higher (`Skin.lift`) so no light line shows along the top edge.
-
-## Notch widgets
-The open notch shows a big rounded time and date (left), a friendly weather line like "it's warm" with "24° · feels 25°" (right), a plain now-playing row, then the search field. No cards or boxes, so room is left for reminders and due dates later. Code in `JarvisKit/Widgets/`; `WidgetFeed` fills `AppState` only when the panel opens or a player broadcasts a change.
-- Weather: Open-Meteo (free, no key). City from Settings, else this Mac's location.
-- Music: Apple Music and Spotify change notifications (no permission); previous/play-pause/next via AppleScript (Automation permission on first use). Clicking the song opens the app playing it and closes the notch.
+A skin is a small struct (colours, radius, glow, font, shoulders, material) in its own file; add a file and register it
+in `SkinCatalog`. Shipped: Classic (default), Liquid Glass, Midnight, Arc, Pink, Terminal.
 
 ## Brain
-Most questions never reach Claude:
-1. Fixed commands in plain code (timers etc., M5). "Dock Safari" (`AppCommand.dock`) puts every window of that app showing on this desktop in the dock; "dock this" is left to the local brain's dock tool, which knows the window in front.
-2. **Local brain first** (setting, on by default; questions answered from the user's own data (calendar, timers) skip the "recent" news rule; the local model gets a hint to call `calendar_list` first): the local brain tries everything, including writing, maths, code and long questions; only anything recent ("news", "who won", "weather"...), camera requests and Notion skip it. Notion (named, or worded like it with a token saved) always goes to the cloud brain: the 8B model misread which item was next too often (10-17). A local model that can use tools (built-in Qwen, Ollama; not Apple on-device) gets every tool that is set up (timers, calendar, Mac tools, the calculator; never Notion) on every question through `LocalToolLoop`, and decides itself which a request needs: it replies with one line of JSON, Jarvis runs the tool and sends the result back. Every value is checked by the tool (timer 1 s to 24 h, dates within two years, real ids), so a wrong guess is refused, not acted on. Broken JSON is retried, never shown. Plainly worded timers ("timer 5 minutes") are still done by code instantly; calendar adds go to Qwen, which reads loose wording ("tomorrow evening around six") better.
-   With the setting off, the old rules apply: `Router`: plain word rules. Small questions go to the local brain; Notion, writing, code, maths, long questions and anything recent go to the cloud brain. "Claude, ..." forces the cloud.
-3. The local brain replies `ESCALATE` when unsure; Jarvis then asks the cloud brain (caption says "local unsure").
-   A local model with tools is a function bot (10-16): it only does things with its tools (timers and reminders, reading
-   the calendar, the calculator, and the Mac tools: `mac_open_app`, `mac_dock_window` / `mac_undock_window`
-   for the notch's window dock, `mac_quick_dock` on or off) and never answers from its own knowledge: facts,
-   explanations, opinions and writing all get `ESCALATE`. A change it can't make to the calendar (or Notion, when
-   connected) gets "you're probably the better person for the job. Want me to open Calendar?", and a yes opens it.
-   "Good morning" / "morning Jarvis" (`MorningBrief`, code, no model): the date, what to wear (never the number;
-   feels-like now averaged with the day's high), sky, wind and chance of rain from Open-Meteo, how many events are left
-   today, and one or two big things (exams due today first, then other due items, then the next event). Weather
-   questions about here and now ("what's the weather", "do I need an umbrella") get just the weather part; other
-   places and forecasts go to a brain.
-   **Codex** (cloud brain option, the user's ChatGPT plan): `CodexProvider` runs `codex exec --json --ephemeral
-   --ignore-user-config` in an empty folder, read-only (Full: `danger-full-access`), web search on, the system prompt
-   sent ahead of the question. MCP servers go in by `-c mcp_servers...`; the Notion server reads its token from the
-   Keychain, so it never goes on a command line. Settings installs it (Homebrew, else npm) and signs in through one
-   Terminal window (`codex login`), like Claude Code. The access switch applies to it the same way.
-   **Claude's access** (Settings › Connections, None / Tools / Full): None is web search, Notion and the camera.
-   Tools adds Jarvis's own tools for the cloud brain (apps, window dock, Quick Dock, timers, the whole calendar):
-   the API calls them directly; Claude Code reaches them through `Jarvis --tools-mcp`, which passes each call over a
-   user-only socket in Application Support to the running app (`ToolRelay`), refused while access is None. Full adds
-   Claude Code's Bash, Read, Edit, Write, Glob and Grep on the home folder, allowed up front (`claude -p` can't ask),
-   with a system note to do only what was asked and never delete, send or install unless told to.
-   It never shows a guess: a repeated tool call stops the loop, and running out of rounds without doing anything is a
-   failure handed on, not its last search result shown as the answer.
-- Local brain: Apple on-device model (default; free, offline), a built-in model, or Ollama (Settings lists the pulled models, e.g. Qwen or Gemma).
-  - Built-in: llama.cpp (prebuilt xcframework, Metal) runs a Qwen3 GGUF inside Jarvis, no Ollama needed. Settings downloads it from Hugging Face into `Application Support/Jarvis/Models` (1.7B, 4B or 8B, default picked from the Mac's memory). The model unloads after 1 idle minute and on quit.
-- Cloud brain: Claude Code via `claude -p` (default; uses the user's subscription). Run stripped down (web search only, no MCP/skills/settings, empty folder): ~1k tokens a question instead of ~138k. Later, Notion edits go through it with only the Notion MCP loaded.
-- Every question starts with the time and the next 7 days' dates (`Persona.context`), so small models look dates up instead of working them out.
-- Every answer is one short paragraph of plain text (`Persona`), since it is captioned and spoken. No LaTeX or markdown: models are told so, and `Readable` turns whatever slips through into plain maths (x², √2, (a+b)/2, π) and drops markdown marks.
-- Token saving (off by default): Jarvis asks "Use it?" before any question goes to the cloud brain; "Claude, ..." skips the check.
-- Follow-ups: answered turns from the last 5 minutes (up to 3) are sent along.
-  - Built-in "Jarvis 8B (trained)": Qwen3 8B fine-tuned on Jarvis's tools (the fine-tuning is kept outside this repo); not
-    downloadable, so Settings lists it only once its GGUF is in the Models folder.
-  - Ollama is asked to skip thinking (`reasoning_effort: "none"`): Qwen3 otherwise thinks for most of a minute and can return no answer.
-- Conversation log (`TurnLog`; Settings › Connections › Training, off by default): every question and every model call, raw (exact system
-  prompt and messages, raw reply including tool calls, errors, timing), one JSONL file a day in `Application Support/Jarvis/Logs`, for training
-  on real use. A "call" line is already a training example; lines of one question share `turn`. Photos noted, not saved.
-- Open question: Anthropic's terms limit third-party apps using people's subscriptions; check before publishing with Claude Code as the default.
-- Later: OpenAI subscription via the Codex CLI.
+Most questions never reach the cloud:
+1. **Plain code** for fixed commands: timers and reminders (`TimerCommand`), "add X to my calendar tomorrow at 3pm",
+   "good morning" (`MorningBrief`), local weather, "dock Safari". Instant and free.
+2. **Local brain** (Apple on-device, built-in llama.cpp Qwen3, or Ollama) tries everything else, except anything
+   recent (news, scores), the camera and Notion. A local model with tools is a *function bot*: it only acts through
+   its tools (`LocalToolLoop`, one line of JSON per call) and answers `ESCALATE` for facts, explanations and writing.
+   Every value is checked by the tool (timer 1 s–24 h, real calendar ids), so a wrong guess is refused, not acted on.
+   Notion always goes to the cloud: the 8B model misread which item was next too often (10-17).
+3. **Cloud brain**: Claude Code (`claude -p`, the user's subscription, default), Codex (`codex exec`, the user's
+   ChatGPT plan), the Claude API, or any OpenAI-compatible endpoint. Claude Code runs stripped down (no MCP, skills or
+   settings, empty folder): about 1k tokens a question instead of about 138k.
+- **Claude's access** (Connections: None / Tools / Full). Tools gives the cloud brain Jarvis's own tools; Claude Code
+  reaches them through `Jarvis --tools-mcp`, relayed over a user-only socket to the running app (`ToolRelay`). Full
+  adds file and shell tools on the home folder, allowed up front because `claude -p` can't ask.
+- Every question starts with the time and the next 7 days' dates (`Persona.context`), so small models look dates up
+  instead of working them out.
+- Answers are one short plain paragraph (`Persona`), since they're captioned and spoken. `Readable` turns any stray
+  LaTeX or markdown into plain text (x², √2).
+- Ollama is asked to skip thinking: Qwen3 otherwise thinks for most of a minute and can return nothing.
+- "Ask before cloud" (off by default) asks "Use it?" first; "Claude, …" skips it. Follow-ups send the last 3 turns
+  from the last 5 minutes.
+- Conversation log (`TurnLog`, off by default): every model call raw, one JSONL file a day, for training on real use.
+  The fine-tuned "Jarvis 8B" is trained outside this repo and only listed once its GGUF is in the Models folder.
+- Open question: Anthropic's terms limit third-party apps using people's subscriptions; check before publishing with
+  Claude Code as the default.
 
-## Tools the model can call
-`calendar`, `notion`, `timer`, `camera`, in `JarvisKit/Tools/`. `Toolbox` decides what a request needs.
-- Timer: plain code, no model (`TimerCommand` reads "timer 5 minutes", "an hour and a half timer", "remind me in 20 minutes to stretch", "remind me at 8:45 pm to call mom", "cancel the timer", "how long is left"). Timers and reminders only: an alarm ("set an alarm", "wake me up at 7") gets a reply saying so and what to say instead, since Jarvis can't wake a sleeping Mac or reach a phone. A clock time without am/pm is whichever comes next; "tonight" and "in the morning" settle it. The caption shows just the question and answer (who answered and the token count are gone, 10-17). When one ends: Glass chime, the notch opens, and it's said aloud. The next timer counts down in the peek and the open panel's top band; the menu lists them to cancel.
-- Calendar: EventKit, i.e. Apple Calendar, so Google, iCloud and Exchange calendars added in System Settings › Internet Accounts count; the local brain can list, add, change (move, retime, rename) and delete single events, by real ids from the list, and a delete must also name the event; Settings lists the calendars Jarvis sees and has an "Add Google Calendar…" shortcut. No separate Google sign-in (that would need a registered Google Cloud OAuth app). "Add X to my calendar tomorrow at 3pm" is plain code (`NSDataDetector` for the date, no time means all day). Schedule questions get the events (today and tomorrow, or the week) put in front of the question for whichever brain answers. The open panel lists running timers, alarms and reminders first (a countdown, or the time they go off; hover for an x that cancels), then the "TODAY" list shows today's remaining events, then only what's due today from Notion (done items hidden), up to 4 rows (8 pushed the music row and search field too far down); Settings › General can hide it.
-- Notion: the user's integration token (Keychain). Notion lookups stay local; Notion changes (add, edit, mark done...) always go to Claude. Claude API: Jarvis runs the tool loop itself. Claude Code: Jarvis starts itself as a tiny MCP server (`Jarvis --notion-mcp`, `MCPServer`), the only MCP server loaded; the token goes to it through the environment (`${JARVIS_NOTION_TOKEN}` in the config), never the command line, a file or logs. Tools: due (unfinished items with a date from today on, across every shared database with a date column, soonest first, said like "due Thursday at 6:45 AM"), search, read page, append (to-dos or text), tick a to-do, create a page or database row, list a database. Questions about due dates, assignments, homework or to-do lists bring the Notion tools when a token is saved, without saying "Notion". The instructions tell the model it really is connected and to retry on errors rather than say it can't.
-- Camera: "look at this", "what am I holding"... takes one photo after any token-saving check, then sends it as an image (Claude API) or as `./camera.jpg` with the Read tool (Claude Code). OpenAI-compatible brains can't use Notion or the camera and say so.
+## Tools
+`JarvisKit/Tools/`. `Toolbox` decides what a request needs.
+- **Timers and reminders**, no alarms: Jarvis can't wake a sleeping Mac or reach a phone, so an alarm request is
+  answered with what to say instead.
+- **Calendar**: list, add, change and delete single events by real ids; a delete must also name the event.
+- **Notion**: due items, search, read, append, tick, create. For Claude Code, Jarvis runs itself as the only MCP
+  server (`Jarvis --notion-mcp`); the token goes through the environment, never the command line, a file or logs.
+- **Camera**: one photo, after any ask-before-cloud check. OpenAI-compatible brains can't use Notion or the camera.
+- **Mac tools**: open apps, dock and undock windows, Quick Dock. **Maths**: a calculator, so models don't do arithmetic.
 
 ## Code layout
 ```
-Sources/JarvisKit/      (Swift package, testable from the CLI)
+Sources/JarvisKit/      the logic, testable from the command line
   Core/     AppState, Settings, Keychain, TokenMeter, AssistantName
-  Brain/    ChatProvider, Claude Code, Claude API, OpenAI-compatible, Apple on-device, built-in llama.cpp, Router, Assistant, TurnLog
-  Browser/  Web tab tabs and bookmarks, saved passwords
-  Dock/     held windows, Finder shelf, video, window control
-  Notch/    layout and state machine
-  Setup/    Mac advice, Claude Code setup
-  Tools/    Calendar, Notion, Timer, Camera, maths, apps
-  Voice/    Listener, Speaker, Hotkeys
+  Brain/    providers (Claude Code, Codex, Claude API, OpenAI-compatible, Apple, llama.cpp), Router, Assistant, Persona
+  Browser/  Web tab tabs, bookmarks, passwords
+  Dock/     held windows, side dock, video, Finder shelf, desktops
+  Notch/    layout, state machine, ticker
+  Setup/    Mac advice, Claude Code and Codex setup, Updater
+  Tools/    timers, calendar, Notion, camera, maths, Mac tools, MCP server
+  Voice/    listener, speaker, hotkeys
   Skins/    Skin struct + one file per skin
-  Widgets/  now playing, weather, location, WidgetFeed
-Sources/JarvisApp/      (thin app target)
-  App/      entry, menu bar, windows
-  Notch/    panel, views, dock, video, Quick Dock
-  UI/       open panel, Finder, Web, captions, welcome, settings
+  Widgets/  now playing, weather, battery, system stats, Today list
+Sources/JarvisApp/      thin app target: windows, notch views, settings UI
 Tests/JarvisKitTests/
 ```
-Rules:
-- Files under ~300 lines, one job each.
-- One `AppState`; views only read it.
-- Services behind protocols (swappable, testable).
-- No globals, no `before-*` backup copies (git is the history).
-- Unit tests for timers and the token meter.
+Rules: files under ~300 lines, one job each. One `AppState`; views only read it. Services behind protocols. No globals.
 
-## Milestones
-1. **M1 Notch shell:** window, idle/peek/open, hover vs click, skin plumbing, slim menu. (done) The menu now reads Talk, Type, Quick Dock, then Skin, Open the Notch On and Notch On, Timers, Settings, Quit; no token count.
-2. **M2 Settings + welcome:** Settings model, tabs, first-run flow, Keychain. (done)
-3. **M3 Text chat:** local + cloud brains, router, captions, token meter. (done)
-4. **M4 Voice:** hotkeys, listening, speaking, stop chip. (done)
-5. **M5 Tools:** timer, then calendar, then Notion, then camera. (done)
+## Not yet
+An iPhone link, other personas, a direct Google Calendar connection.
 
-## Not in v1
-An iPhone link, other personas, morning briefs, a direct Google Calendar connection. The tool interface leaves room to add them.
+## Build
+No Xcode project: `scripts/bundle.sh` wraps the `Jarvis` executable into `build/Jarvis.app`, so Command Line Tools are
+enough. `scripts/install.sh` (run by `Install Jarvis.command`) checks the Mac, makes the signing cert, bundles a release
+and installs it. `scripts/test.sh` adds the Swift Testing paths the Command Line Tools need.
 
-## Setup note
-No Xcode project: Jarvis is a Swift package. `scripts/bundle.sh` wraps the `Jarvis` executable into `build/Jarvis.app` (Info.plist from `Support/`), so Command Line Tools are enough. `scripts/install.sh` (run by `Install Jarvis.command`) checks the Mac, makes the signing cert, bundles a release and installs it in Applications. `scripts/test.sh` adds the Swift Testing paths CLT needs. Notarized releases would need Xcode and a paid developer account.
-
-Signing: ad-hoc signatures change every build, so macOS re-asks for permissions and Keychain access. `scripts/make-signing-cert.sh` (run once) makes a self-signed "Jarvis Local Signing" cert that `bundle.sh` then uses, keeping the app's identity stable across rebuilds.
+Signing: ad-hoc signatures change every build, so macOS re-asks for permissions and Keychain access each time.
+`scripts/make-signing-cert.sh` makes a self-signed "Jarvis Local Signing" cert once, keeping the app's identity stable.

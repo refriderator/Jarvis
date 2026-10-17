@@ -8,4 +8,4 @@ Read DESIGN.md first; it is the source of truth for decisions, layout and milest
 - Tokens only, never money, in any UI.
 - Secrets in Keychain only, never in settings files or logs.
 - Match the existing code's naming and comment density. Keep it readable over clever.
-- Build milestone by milestone (M1..M5); don't jump ahead.
+- Keep DESIGN.md to the why, what was tried and dropped, and macOS limits; sizes and timings live in the code.
