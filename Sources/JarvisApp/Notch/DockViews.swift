@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The tab beside the closed notch with held apps' icons. It springs out from behind the notch once the
 /// dropdown has closed and tucks back in when it opens. Click an icon to get its window back; drag it out and
-/// the app lifts into the pointer and becomes its window there.
+/// the app lifts into the pointer and becomes its window there. Over a tucked video it's in front of the video's
+/// tab, along its top (see `TuckedVideoTab`).
 struct DockTab: View {
     let state: AppState
     let dock: DockController
@@ -13,10 +14,10 @@ struct DockTab: View {
     var body: some View {
         GeometryReader { geo in
             let layout = state.layout
-            let width = layout.tabFrame.width + DockTabShape.flare
-            // Tucked, it appears in place at the end of the tuck (the cover was its shape); otherwise it springs out.
-            TabBody(skin: state.skin, shown: stage == .idle && layout.showsTab && video.morph == nil, width: width,
-                    bounce: layout.tuckedVideo == nil, notchHeight: layout.notch.height, height: layout.tabFrame.height) {
+            let shown = stage == .idle && layout.showsTab && video.morph == nil
+            // In front of a tucked video's tab, no glow: it would light up that tab under it like a seam.
+            TabBody(skin: state.skin, shown: shown, width: layout.tabFrame.width + DockTabShape.flare,
+                    glows: !state.video.tucked, height: layout.tabFrame.height) {
                 HStack(spacing: 4) {
                     if state.video.available && !state.video.held {
                         // A video is floating: hold it here.
@@ -40,32 +41,29 @@ struct DockTab: View {
                     }
                 }
             }
-            // Tucked, it bounces out when the pointer arrives and stays out while it's there, then eases back in
-            // (no bounce) when it leaves: stretched from its top edge, so the video stays covered all the while.
-            .scaleEffect(x: 1, y: 1 + drop / max(layout.tabFrame.height, 1), anchor: .top)
-            .overlay(alignment: .topLeading) {
-                // Tucked: the tab has grown down over the video and wears the video icon, centred across it and in
-                // the part below the notch. It rides the bounce where the stretch takes its spot, unstretched.
-                if layout.tuckedVideo != nil, stage == .idle, video.morph == nil {
-                    let y = (layout.notch.height + layout.tabFrame.height) / 2 - TuckedVideoIcon.lift
-                    TuckedVideoIcon(skin: state.skin)
-                        .position(x: layout.tabFrame.width / 2, y: y)
-                        .offset(y: drop * y / max(layout.tabFrame.height, 1))
-                        .help("Bring the video back")
-                        .transition(.opacity)
-                }
-            }
-            .animation(video.pointerOverTab ? .spring(duration: 0.4, bounce: 0.5) : .easeOut(duration: 0.2),
-                       value: video.pointerOverTab)
-            .frame(width: width + 8, height: layout.tabFrame.height + 18, alignment: .topLeading)
-            // Cut at the notch's edge, so it comes out from behind the notch rather than over it. Only that edge:
-            // right and down the glow fades out freely instead of stopping in a box. Below the notch it fades out
-            // to the left too: cut there, it hung under the tab as a column with a hard left edge. Only while the
-            // tab is out: hidden behind the notch, its bottom edge (a point lower than the notch's) showed below it.
+            .besideNotch(layout.tabFrame, layout: layout, out: shown, in: geo)
+        }
+        .animation(DockTab.resize, value: state.layout.tabSlots)
+    }
+
+    /// Icons coming and going: the tab grows or shrinks with this.
+    static let resize = Animation.spring(duration: 0.35, bounce: 0.3)
+}
+
+extension View {
+    /// A side tab placed at `frame` (screen coordinates), in a panel view centred on the notch. Cut at the frame's
+    /// left edge, so it comes out from behind the notch rather than over it. Only that edge: right and down the
+    /// glow fades out freely instead of stopping in a box. Below the notch it fades out to the left too: cut
+    /// there, it hung under the tab as a column with a hard left edge. Only while the tab is `out`: hidden behind
+    /// the notch, its bottom edge (a point lower than the notch's) showed below it.
+    func besideNotch(_ frame: CGRect, layout: NotchLayout, out: Bool, in geo: GeometryProxy) -> some View {
+        let width = frame.width + DockTabShape.flare + 8
+        return self
+            .frame(width: width, height: frame.height + 18, alignment: .topLeading)
             .mask(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
                     Rectangle().padding(.trailing, -GlowMask.reach).padding(.bottom, -GlowMask.reach)
-                    if stage == .idle, layout.showsTab || layout.tuckedVideo != nil, video.morph == nil {
+                    if out {
                         Rectangle()
                             .padding(.leading, -GlowMask.reach).padding(.trailing, -GlowMask.reach)
                             .padding(.bottom, -GlowMask.reach)
@@ -73,16 +71,8 @@ struct DockTab: View {
                     }
                 }
             }
-            .position(x: geo.size.width / 2 + layout.tabFrame.minX - layout.notch.midX + (width + 8) / 2,
-                      y: (layout.tabFrame.height + 18) / 2 - 1)
-            // Tucked, a click brings the mini player back.
-            .onTapGesture { if layout.tuckedVideo != nil { video.untuck() } }
-        }
-        .animation(.spring(duration: 0.35, bounce: 0.3), value: state.layout.tabSlots)
+            .position(x: geo.size.width / 2 + frame.minX - layout.notch.midX + width / 2, y: (frame.height + 18) / 2 - 1)
     }
-
-    /// How far the tucked tab's bottom is out: dropped while the pointer is on it.
-    private var drop: CGFloat { video.pointerOverTab ? 13 : 0 }
 }
 
 /// Where a dragged window goes: an empty dashed box in the dropdown that the window's app icon fades into
@@ -159,11 +149,12 @@ struct NumberBadge: View {
     }
 }
 
-private struct TabBody<Content: View>: View {
+struct TabBody<Content: View>: View {
     let skin: Skin
     let shown: Bool
     let width: CGFloat
     var bounce = true
+    var glows = true
     var notchHeight: CGFloat? = nil
     var height: CGFloat? = nil
     @ViewBuilder let content: Content
@@ -185,10 +176,15 @@ private struct TabBody<Content: View>: View {
         }
         .frame(width: width, height: height)
         // Glows like the notch it hangs from.
-        .shadow(color: skin.material == .glass ? .clear : skin.accent.opacity(shown ? 0.7 : 0), radius: skin.glow)
+        .shadow(color: skin.material == .glass || !glows ? .clear : skin.accent.opacity(shown ? 0.7 : 0), radius: skin.glow)
         // Hidden: pulled left, behind the notch and out of the clip.
         .offset(x: shown ? 0 : -width)
-        .animation(shown ? (bounce ? NotchMotion.tabBounce : nil) : NotchMotion.tabIn, value: shown)
+        .animation(Self.motion(shown: shown, bounce: bounce), value: shown)
+    }
+
+    /// Springing out (or appearing in place, without `bounce`) and sliding back in.
+    static func motion(shown: Bool, bounce: Bool = true) -> Animation? {
+        shown ? (bounce ? NotchMotion.tabBounce : nil) : NotchMotion.tabIn
     }
 }
 

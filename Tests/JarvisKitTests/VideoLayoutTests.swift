@@ -106,9 +106,10 @@ struct VideoLayoutTests {
         let state = AppState()
         state.updateVideo { $0.held = true }
         #expect(state.layout.videoAspect != nil)
-        state.updateVideo { $0.tucked = true }
+        state.updateVideo { $0.tucked = true; $0.tuckedSize = CGSize(width: 59, height: 33) }
         #expect(state.layout.videoAspect == nil, "the notch closes up plain")
-        #expect(state.layout.tabSlots == 1, "an icon to bring it back")
+        #expect(state.layout.tabSlots == 0, "no slot among the apps: it has its own tab")
+        #expect(state.layout.videoTabFrame != nil, "a tab to bring it back")
     }
 
     @Test func aTuckedVideoWaitsRightOfTheNotchUnderTheTab() throws {
@@ -118,7 +119,7 @@ struct VideoLayoutTests {
         #expect(layout.frame(for: .idle) == notch, "the notch itself stays plain")
         #expect(video.minX > notch.maxX, "right of the notch")
         #expect(video.maxY == notch.minY, "as high as a window may go")
-        #expect(layout.tabFrame.contains(video), "the side tab grows down over it")
+        #expect(try #require(layout.videoTabFrame).contains(video), "its tab grows down over it")
         #expect(layout.hotZone(for: .idle).isNull, "hovering brings the video back rather than opening the dropdown")
     }
 
@@ -129,5 +130,17 @@ struct VideoLayoutTests {
         let big = try #require(layout.theaterVideoFrame)
         #expect(layout.frame(for: .open).contains(big), "the big video fits inside the full-width dropdown mid-switch")
     }
-}
 
+    @Test func heldAppsSitAlongTheTopOfATuckedVideosTab() throws {
+        var layout = NotchLayout(notch: notch)
+        layout.tuckedVideo = CGSize(width: 59, height: 33)
+        layout.tabSlots = 3
+        let apps = layout.tabFrame, tab = try #require(layout.videoTabFrame)
+        let video = try #require(layout.tuckedVideoFrame)
+        #expect(apps.height == notch.height + 1, "the apps' tab stays notch-high")
+        #expect(apps.minX == tab.minX && apps.maxY == tab.maxY, "from the same corner, in front along the top")
+        // Its bottom edge is a point below the notch's, so it laps the video's top edge by that point, no more.
+        #expect(apps.minY >= video.maxY - 1, "so the icons never sit on the video or its icon")
+        #expect(tab.contains(video))
+    }
+}

@@ -109,7 +109,7 @@ public final class AppState {
         layout.videoMinimum = video.minimum
         layout.hidesContent = (video.catching || dock.contentHidden) && dock.dragging == nil
         // The tab beside the closed notch: held apps, and a video button while a loose video floats.
-        layout.tabSlots = dock.tabSlots + (video.available && !video.held || video.held && video.tucked ? 1 : 0)
+        layout.tabSlots = dock.tabSlots + (video.available && !video.held ? 1 : 0)
         // Keep holds the dropdown open, whatever the tab.
         notch.locked = dock.keep != .off
         layout.theater = video.held && video.theater

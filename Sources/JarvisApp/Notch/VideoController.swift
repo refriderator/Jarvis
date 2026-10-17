@@ -240,7 +240,9 @@ final class VideoController {
     func pointer(at point: CGPoint) {
         let over = holeOpen && (frameOnScreen?.contains(point) ?? false)
         if over != pointerOverVideo { pointerOverVideo = over }
-        let overTab = state.video.tucked && morph == nil && state.layout.tabFrame.contains(point)
+        // Not on held apps' tab, which sits in front of it along the top.
+        let onApps = state.layout.showsTab && state.layout.tabFrame.contains(point)
+        let overTab = morph == nil && !onApps && state.layout.videoTabFrame?.contains(point) == true
         if overTab != pointerOverTab { pointerOverTab = overTab }
     }
 
@@ -311,7 +313,7 @@ final class VideoController {
         var after = state.layout
         after.videoAspect = nil
         after.tuckedVideo = CGSize(width: 59, height: 33)
-        let tab = after.tabFrame
+        guard let tab = after.videoTabFrame else { return }
         let mini = miniShape(start), final = tabShape(tab)
         let step = { [weak self] (delay: Double, work: @escaping @MainActor () -> Void) in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
@@ -381,7 +383,8 @@ final class VideoController {
         mini.videoAspect = state.video.aspect
         let end = mini.frame(for: .idle)
         guard let spot = mini.miniVideoFrame else { return }
-        let start = tabShape(state.layout.tabFrame), target = miniShape(end)
+        guard let tab = state.layout.videoTabFrame else { return }
+        let start = tabShape(tab), target = miniShape(end)
         let step = { [weak self] (delay: Double, work: @escaping @MainActor () -> Void) in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 guard let self, current == self.move else { return }

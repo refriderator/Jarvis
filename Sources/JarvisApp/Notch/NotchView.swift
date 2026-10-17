@@ -39,10 +39,16 @@ struct NotchView: View {
             .frame(width: size.width + 2 * shoulder, height: size.height)
             .coordinateSpace(.named(NotchView.shapeSpace))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            // The side tab sits behind the notch, its left end tucked under it; grown down over a tucked video it
-            // comes in front, so the notch's corner outline doesn't show through where they meet.
+            // The side tab sits behind the notch, its left end tucked under it. A tucked video's tab, grown down
+            // over the video, comes in front, so the notch's corner outline doesn't show through where they meet;
+            // held apps' tab then comes in front of that one, along its top.
             .background { if !state.video.tucked { DockTab(state: state, dock: dock, video: video, stage: stage) } }
-            .overlay { if state.video.tucked { DockTab(state: state, dock: dock, video: video, stage: stage) } }
+            .overlay {
+                if state.video.tucked {
+                    TuckedVideoTab(state: state, video: video, stage: stage)
+                    DockTab(state: state, dock: dock, video: video, stage: stage)
+                }
+            }
             .overlay {
                 // The video tucking away: the cover widening right, then shrinking into the side tab.
                 if let morph = video.morph {

@@ -227,7 +227,8 @@ final class NotchController {
     private func updateMouseHandling(at location: CGPoint) {
         guard !draggingFile else { return }
         let onNotch = state.notch.mode == .open && state.layout.hotZone(for: .open).contains(location)
-        let overTab = state.notch.mode != .open && state.layout.showsTab && state.layout.tabFrame.contains(location)
+        let overTab = state.notch.mode != .open && (state.layout.showsTab && state.layout.tabFrame.contains(location)
+            || state.layout.videoTabFrame?.contains(location) == true)
         let pressing = NSEvent.pressedMouseButtons & 1 != 0
         // Over a held video, clicks go through the hole to it, except on its ↑ ↓ tabs.
         let overControls = video.showsControls && video.controlFrames.contains { $0.contains(location) }

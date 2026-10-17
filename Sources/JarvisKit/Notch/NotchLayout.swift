@@ -13,7 +13,7 @@ public struct NotchLayout: Sendable, Equatable {
     public var dropDepth: CGFloat = 20
     public var openSize = CGSize(width: 560, height: 218 - 2 * NotchLayout.inputBarLift)
     /// A further lift for the search field alone, evening out the gaps above and below it.
-    public static let inputBarNudge: CGFloat = 1
+    public static let inputBarNudge: CGFloat = 5
     /// Room under the search field, down to the panel's bottom edge (part of `openSize`'s height).
     public static let inputBarBottom: CGFloat = 10
     /// The search field is moved up this much (and the panel made twice as much shorter), trimming the gap
@@ -176,16 +176,21 @@ public struct NotchLayout: Sendable, Equatable {
     public var tabFrame: CGRect {
         // Against the closed notch's right edge, which is wider than the hardware notch around a mini player.
         let x = notch.midX + size(for: .idle).width / 2 - 8
-        var width = 8 + 6 + CGFloat(max(tabSlots, 1)) * Self.tabSlotWidth
-        var height = notch.height + 1
-        if let tucked = tuckedVideo {
-            // Down over the tucked video, with its margin.
-            // 8 pt under the notch, then margin, video, margin, and 8 more so the video sits in the middle of
-            // the tab's whole width (it's drawn in front of the notch then, so all of it shows).
-            width = max(width, 16 + 2 * Self.videoPad + tucked.width)
-            height += tucked.height + Self.videoPad
-        }
+        let width = 8 + 6 + CGFloat(max(tabSlots, 1)) * Self.tabSlotWidth
+        let height = notch.height + 1
         return CGRect(x: x, y: notch.maxY - height, width: width, height: height)
+    }
+
+    /// The tab over a tucked video: from where `tabFrame` starts, down over the video with its margin. 8 pt under
+    /// the notch, then margin, video, margin, and 8 more so the video sits in the middle of the tab's whole width
+    /// (it's drawn in front of the notch, so all of it shows). Held apps' tab stays notch-high, in front of it
+    /// along the top, where the tab is beside the notch and the video (below the notch) isn't.
+    public var videoTabFrame: CGRect? {
+        tuckedVideo.map { tucked in
+            let width = 16 + 2 * Self.videoPad + tucked.width
+            let height = notch.height + 1 + tucked.height + Self.videoPad
+            return CGRect(x: tabFrame.minX, y: notch.maxY - height, width: width, height: height)
+        }
     }
 
     /// How tall a kept caption needs to be to show a whole answer: a rough line count, so it errs tall.
