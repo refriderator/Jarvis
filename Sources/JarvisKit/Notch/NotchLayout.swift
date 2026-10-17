@@ -30,7 +30,7 @@ public struct NotchLayout: Sendable, Equatable {
     public static let maxTimerRows = 4
     /// Rows in the open panel's "TODAY" list: today's events, then what's due (0 hides the list).
     public var agendaRows = 0
-    public static let maxAgendaRows = 8
+    public static let maxAgendaRows = 4
     public static let agendaRowHeight: CGFloat = 20
     /// The "TODAY" heading above the rows.
     public static let agendaHeaderHeight: CGFloat = 18
