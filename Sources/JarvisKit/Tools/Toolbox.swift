@@ -12,6 +12,8 @@ public struct Toolbox {
     public var apps: AppLauncher?
     /// Notion tools when a token is saved, else nil.
     public var notion: () -> ToolKit?
+    /// Notion's API when a token is saved, for code that reads it (what's due, for plans questions).
+    public var notionAPI: () -> NotionAPI?
     /// Opening apps, the notch's window dock and Quick Dock, for the local brain.
     public var mac: MacControls?
     /// For the morning brief and weather questions, answered by code.
@@ -26,7 +28,8 @@ public struct Toolbox {
     public init(timers: TimerCenter? = nil, calendar: CalendarSource? = nil, camera: CameraSource? = nil,
                 apps: AppLauncher? = nil, mac: MacControls? = nil, weather: WeatherSource? = nil,
                 reminders: ReminderSource? = nil, shortcuts: ShortcutRunner? = nil, screen: ScreenTextSource? = nil,
-                notion: @escaping () -> ToolKit? = { nil }) {
+                notion: @escaping () -> ToolKit? = { nil }, notionAPI: @escaping () -> NotionAPI? = { nil }) {
+        self.notionAPI = notionAPI
         self.reminders = reminders
         self.shortcuts = shortcuts
         self.screen = screen
@@ -142,12 +145,14 @@ public struct Toolbox {
     }
 
     /// Notion when named, or for due dates, assignments and to-do lists when a token is saved.
-    private static let notionWords = #"\b(notion|due|deadlines?|assignments?|homework|problem sets?|to-?do|todo list|tasks?|midterms?|exams?|tests?|quiz(zes)?)\b"#
+    static let notionWords = #"\b(notion|due|deadlines?|assignments?|homework|problem sets?|to-?do|todo list|tasks?|midterms?|exams?|tests?|quiz(zes)?)\b"#
 
     public func needs(_ text: String) -> CloudNeeds {
         let named = text.range(of: #"\bnotion\b"#, options: [.regularExpression, .caseInsensitive]) != nil
         let sounds = text.range(of: Self.notionWords, options: [.regularExpression, .caseInsensitive]) != nil
-        return CloudNeeds(photo: camera != nil && MacCamera.matches(text), notion: named || (sounds && notion() != nil))
+        // A plans question gets Notion as well as the calendar, however it's worded (`isPlans`).
+        return CloudNeeds(photo: camera != nil && MacCamera.matches(text),
+                          notion: named || ((sounds || isPlans(text)) && notion() != nil))
     }
 
     /// What the cloud brain can use on this Mac when Claude's access allows tools: the apps, window dock and Quick Dock,

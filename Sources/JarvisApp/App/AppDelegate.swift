@@ -36,7 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let tools = Toolbox(timers: timers, calendar: calendar, camera: MacCamera(), apps: launcher, mac: mac, weather: weather,
                             reminders: EventKitReminders(), shortcuts: MacShortcuts(), screen: MacScreenText(),
-                            notion: { state.secret(.notionToken).map { NotionTools(token: $0) } })
+                            notion: { state.secret(.notionToken).map { NotionTools(token: $0) } },
+                            notionAPI: { state.secret(.notionToken).map { NotionAPI(token: $0) } })
         let assistant = Assistant(state: state, makeLocal: { Brains.local($0, engine: self.engine) },
                                   makeCloud: { Brains.cloud($0, secret: state.secret) },
                                   makeOnDevice: { AppleOnDeviceProvider.isAvailable ? AppleOnDeviceProvider() : nil },

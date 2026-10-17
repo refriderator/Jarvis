@@ -119,7 +119,8 @@ public final class Assistant {
         if needs.photo || needs.notion { local = nil }
         let decision = Router.decide(text, localAvailable: local != nil, preferLocal: state.settings.localFirst,
                                      hasTools: needs.notion || tools.isScheduling(text))
-        let question = ChatMessage(.user, Persona.context() + tools.context(for: text) + decision.question)
+        // Plans questions get the calendar and Notion for the days asked about, whichever way they're worded.
+        let question = ChatMessage(.user, Persona.context() + (await tools.planContext(for: text)) + decision.question)
         var note = ""
 
         if decision.route == .local, let local {

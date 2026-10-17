@@ -173,6 +173,11 @@ deciding model would add a call to every question:
   adds file and shell tools on the home folder, allowed up front because `claude -p` can't ask.
 - Every question starts with the time and the next 7 days' dates (`Persona.context`), so small models look dates up
   instead of working them out.
+- **Plans questions** ("what's on Tuesday", "am I free Friday", "what's due this week", "when's my exam") get both
+  sources in front of them, decided by word lists (`Toolbox+Plans`): the calendar's events and Notion's due items for
+  the days asked about, and Claude gets the Notion tools too. Before (10-17), "what's on" saw only the calendar and
+  "what's due" only Notion, so the answer changed with the wording. Not every question: the tools cost tokens and
+  time on each one. A named weekday means that day (it used to mean today and tomorrow).
 - Answers are one short plain paragraph (`Persona`), since they're captioned and spoken. `Readable` turns any stray
   LaTeX or markdown into plain text (x², √2).
 - Ollama is asked to skip thinking: Qwen3 otherwise thinks for most of a minute and can return nothing.

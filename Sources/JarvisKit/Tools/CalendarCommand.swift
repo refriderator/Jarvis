@@ -64,8 +64,25 @@ public enum CalendarCommand {
         if lower.contains("next week") {
             return (day.addingTimeInterval(7 * 86_400), day.addingTimeInterval(14 * 86_400))
         }
+        if lower.range(of: #"\bweekend\b"#, options: .regularExpression) != nil, let saturday = next(weekday: 7, from: day) {
+            return (saturday, saturday.addingTimeInterval(2 * 86_400))
+        }
         if lower.contains("week") { return (day, day.addingTimeInterval(7 * 86_400)) }
+        // "Tuesday": that one day, the next one to come (today if it's Tuesday). It used to be today and tomorrow,
+        // so a question about Tuesday on a Saturday saw neither.
+        let names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+        if let index = names.firstIndex(where: { lower.range(of: #"\b\#($0)\b"#, options: .regularExpression) != nil }),
+           let date = next(weekday: index + 1, from: day) {
+            return (date, date.addingTimeInterval(86_400))
+        }
         return (day, day.addingTimeInterval(2 * 86_400))
+    }
+
+    /// The next `weekday` (1 Sunday ... 7 Saturday) from `day`, `day` itself included.
+    private static func next(weekday: Int, from day: Date) -> Date? {
+        let calendar = Calendar.current
+        if calendar.component(.weekday, from: day) == weekday { return day }
+        return calendar.nextDate(after: day, matching: DateComponents(weekday: weekday), matchingPolicy: .nextTime)
     }
 
     /// The events as a short note to put in front of the question; with `ids`, each event's id too, for calendar_change and calendar_delete.
