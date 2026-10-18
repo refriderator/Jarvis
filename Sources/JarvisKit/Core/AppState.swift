@@ -328,7 +328,8 @@ public final class AppState {
         var new = settings
         change(&new)
         guard new != settings else { return }
-        if new.launchAtLogin != settings.launchAtLogin {
+        // Finishing the welcome registers the default too, which nothing toggled.
+        if new.launchAtLogin != settings.launchAtLogin || (new.hasCompletedWelcome && !settings.hasCompletedWelcome) {
             new.launchAtLogin = loginItem.setEnabled(new.launchAtLogin)
         }
         settings = new

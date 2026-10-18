@@ -4,7 +4,7 @@ import Foundation
 /// New toggle = one field here (with a default) + one row in a settings tab.
 public struct Settings: Codable, Equatable, Sendable {
     // General
-    public var launchAtLogin = false
+    public var launchAtLogin = true
     public var showInMenuBar = true
     public var openTrigger: OpenTrigger = .click
 
@@ -59,7 +59,7 @@ public struct Settings: Codable, Equatable, Sendable {
     // Connections (keys and tokens live in the Keychain, not here)
     /// Who answers what the local brain can't.
     public var cloudBrain: CloudBrain = .claudeCode
-    public var claudeModel = "claude-opus-5-5"
+    public var claudeModel = "claude-sonnet-5-5"
     /// Empty: Codex's own default.
     public var codexModel = ""
     /// Token saving: ask before a question goes to the cloud brain.
