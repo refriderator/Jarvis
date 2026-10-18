@@ -136,6 +136,19 @@ public enum SideDock {
         abs(pointer.x - screen.midX) < screen.width / 6
     }
 
+    /// Off the displays the way a held window waits: at most `strandedWidth` of it showing across, or none. One that
+    /// isn't held is stranded: Jarvis was killed or crashed holding it, or macOS moved it while the displays slept,
+    /// and it would otherwise stay there until its app was hidden and shown again.
+    public static func isStranded(_ frame: CGRect, screens: [CGRect]) -> Bool {
+        guard frame.width > 0, frame.height > 0 else { return false }
+        let showing = screens.map { $0.intersection(frame) }.filter { !$0.isNull }.map(\.width).max() ?? 0
+        return showing <= strandedWidth
+    }
+
+    /// Wide enough for the `sliver` and a few points macOS adds when it nudges a window, far narrower than any window
+    /// someone left there on purpose.
+    public static let strandedWidth: CGFloat = 12
+
     /// Where a window of `size` let go of in the middle goes (and the outline shown while it's dragged there):
     /// centred on the display, shrunk to fit.
     public static func released(_ size: CGSize, visible: CGRect) -> CGRect {

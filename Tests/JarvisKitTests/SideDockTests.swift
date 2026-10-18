@@ -102,6 +102,20 @@ struct SideDockTests {
         #expect(visible.contains(SideDock.released(CGSize(width: 4000, height: 3000), visible: visible)))
     }
 
+    @Test func onlyAWindowOffTheEdgeLikeAHeldOneIsStranded() {
+        let size = CGSize(width: 800, height: 600)
+        let held = SideDock.parked(CGRect(origin: CGPoint(x: 300, y: 200), size: size), side: .right, screen: screen,
+                                   visible: visible, others: [])
+        #expect(SideDock.isStranded(held, screens: [screen]), "parked: only the sliver shows")
+        #expect(SideDock.isStranded(held.offsetBy(dx: -8, dy: 0), screens: [screen]), "nudged in a little by macOS")
+        #expect(SideDock.isStranded(held.offsetBy(dx: 5000, dy: 0), screens: [screen]), "off every display")
+        #expect(!SideDock.isStranded(held.offsetBy(dx: -200, dy: 0), screens: [screen]), "a quarter showing: left there")
+        #expect(!SideDock.isStranded(CGRect(origin: CGPoint(x: 300, y: 200), size: size), screens: [screen]))
+        // Showing on the display beside it: not stranded, whatever its own display.
+        let beside = screen.offsetBy(dx: screen.width, dy: 0)
+        #expect(!SideDock.isStranded(CGRect(x: screen.maxX + 100, y: 200, width: 800, height: 600), screens: [screen, beside]))
+    }
+
     @Test func aWindowBiggerThanAskedIsMovedOnScreen() {
         // An app with a 1100 pt minimum width, placed for 720 from the right edge: half of it was off screen.
         let got = CGRect(x: visible.maxX - 730, y: 100, width: 1100, height: 900)

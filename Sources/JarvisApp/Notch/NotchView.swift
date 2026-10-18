@@ -16,13 +16,15 @@ struct NotchView: View {
     let cancelTimer: (UUID) -> Void
 
     @State private var stage: NotchStage = .idle
+    /// The display hop's bounce: the shape grows from its top edge, and the content in it doesn't move.
+    @Environment(\.hopStretch) private var hopStretch
     /// Bumped on every mode change, so a second beat that is no longer wanted is dropped.
     @State private var move = 0
 
     var body: some View {
         let skin = state.skin
         let size = size(stage)
-        // Idle always matches the hardware notch: plain black, no shoulders.
+        // Idle matches the hardware notch: plain black, no shoulders (a pill has none to match: skinned).
         // Closed, the hardware notch has no shoulders; around a mini player it's skinned, shoulders included.
         let shoulder = skinned ? skin.shoulder : 0
         // The hole is only cut while the clamshell is off; with it on, the notch is solid and the clamshell (drawn
@@ -36,7 +38,7 @@ struct NotchView: View {
                 content
                     .padding(.horizontal, shoulder)
             }
-            .frame(width: size.width + 2 * shoulder, height: size.height)
+            .frame(width: size.width + 2 * shoulder, height: size.height * hopStretch, alignment: .top)
             .coordinateSpace(.named(NotchView.shapeSpace))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             // The side tab sits behind the notch, its left end tucked under it. A tucked video's tab, grown down
@@ -217,8 +219,11 @@ struct NotchView: View {
     }
 
     /// At rest the notch is the hardware notch, plain black; holding a video, the mini player around it is in
-    /// the skin's colours like the open notch, so it stays the same colour through every step.
-    private var skinned: Bool { stage != .idle || state.video.held || state.layout.mediumVideoSize != nil }
+    /// the skin's colours like the open notch, so it stays the same colour through every step. A pill (a display
+    /// without a hardware notch) has no notch to match, so it's always in the skin's colours.
+    private var skinned: Bool {
+        stage != .idle || state.layout.isPill || state.video.held || state.layout.mediumVideoSize != nil
+    }
 
     /// The clamshell over a held video: black on the closed notch, the skin's colour open (grey on glass,
     /// which has no solid colour of its own).

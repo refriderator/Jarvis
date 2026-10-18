@@ -87,6 +87,8 @@ final class SideDockController {
     private var displayFrames = SideDockController.currentDisplayFrames()
     /// Displays just changed: until held windows are back off their sides, ones macOS moved aren't forgotten (`prune`).
     private var rearranging = false
+    /// When strays were last looked for (`rescueStrays`): changing desktops looks again, but not every swipe.
+    private var rescuedAt: Date?
 
     init(state: AppState, windows: WindowControlling) {
         self.state = state
@@ -98,8 +100,19 @@ final class SideDockController {
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil,
                                             queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hideCards() }
+            MainActor.assumeIsolated {
+                self?.hideCards()
+                // A desktop's windows can only be seen while it's showing, so ones stranded there are found now.
+                if let self, self.rescuedAt.map({ Date().timeIntervalSince($0) > 5 }) ?? true { self.rescueStrays() }
+            }
         })
+        // Waking, macOS can move windows that are off every edge while the displays come back (and an app slow to
+        // answer just after waking can miss being put back): held ones go back off their sides, others come back.
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.displaysChanged() }
+            })
+        }
         observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil,
                                             queue: .main) { [weak self] note in
             let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
@@ -113,6 +126,8 @@ final class SideDockController {
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.displaysChanged() } })
+        // Windows a Jarvis that was killed or crashed left off the edge (a normal quit puts them back).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.rescueStrays() }
     }
 
     // MARK: Holding
@@ -580,12 +595,24 @@ final class SideDockController {
     /// Forgets windows that closed, or that were moved back onto the screen some other way.
     private func prune() {
         guard !rearranging else { return }
+        let screens = NSScreen.screens.map(\.frame)
+        var nudged: [ParkedWindow] = []
         let gone = parked.filter { item in
             guard let frame = windows.frame(of: item.window) else { return true }
             guard popped?.id != item.id, sliding == nil else { return false }
-            let back = abs(frame.minX - item.parkedAt.minX) > 40
-            if back { log.debug("prune: a held window came back another way") }
-            return back
+            guard abs(frame.minX - item.parkedAt.minX) > 40 else { return false }
+            // Moved, but still off the edge: macOS nudged it (the displays sleeping, say). Forgotten, it was lost
+            // off the screen until its app was hidden and shown again; it goes back where it waits instead.
+            if SideDock.isStranded(frame, screens: screens) {
+                nudged.append(item)
+                return false
+            }
+            log.debug("prune: a held window came back another way")
+            return true
+        }
+        for item in nudged {
+            log.debug("prune: a held window was nudged; holding it again")
+            windows.setFrame(item.parkedAt, of: item.window)
         }
         // Only touched when something went: any change to `parked` updates the notch's strip, and this runs 30
         // times a second.
@@ -639,6 +666,27 @@ final class SideDockController {
             parked[index].parkedAt = windows.setFrame(target, of: item.window) ?? target
         }
         rearranging = false
+        // A window let go of above whose app was too slow to move it (just after waking) is still off the edge.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.rescueStrays() }
+    }
+
+    // MARK: Strays
+
+    /// Brings back onto its display every window off an edge the way a held one waits that isn't held
+    /// (`SideDock.isStranded`): centred, like one let go of in the middle. Only the desktop showing can be seen, so
+    /// changing desktops looks again.
+    func rescueStrays() {
+        guard dragging == nil, slide == nil, !rearranging else { return }
+        rescuedAt = Date()
+        let screens = NSScreen.screens
+        let frames = screens.map(\.frame)
+        for window in windows.visibleWindows() where !isParked(window) {
+            guard let frame = windows.frame(of: window), SideDock.isStranded(frame, screens: frames) else { continue }
+            let near = Self.screen(for: frame).flatMap { $0.frame.intersects(frame) ? $0 : nil }
+            guard let screen = near ?? NSScreen.main ?? screens.first else { continue }
+            windows.setFrame(SideDock.released(frame.size, visible: screen.visibleFrame), of: window)
+            log.info("brought back a window left off the edge")
+        }
     }
 
     private static func currentDisplayFrames() -> [CGDirectDisplayID: CGRect] {

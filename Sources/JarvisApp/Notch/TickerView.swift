@@ -23,7 +23,7 @@ struct TickerView: View {
             .animation(.easeInOut(duration: 0.6), value: lines.isEmpty ? "" : lines[index])
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white.opacity(0.85))
+        .foregroundStyle(state.skin.foreground.opacity(0.85))
         .lineLimit(1)
         .truncationMode(.tail)
         .padding(.horizontal, 14)

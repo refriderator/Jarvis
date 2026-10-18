@@ -29,7 +29,10 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
   tray does the same. Only where there's no hardware notch: beside one, the closed notch is drawn as that notch and
   tabs hang from it, so rising or stretching looked like the notch (or a tab's base) moving; there the tabs slide in
   behind the notch and spring back out. Moved down, the screen's edge showed above it, so the dip and bounce stretch
-  from the top edge instead. An open dropdown closes first. With a video held it moves at once and the video goes
+  from the top edge instead; on the notch the bounce grows the shape's height (`hopStretch`) rather than scaling
+  the view, which squashed the pill's shoulders and text at its top so the top edge seemed to bounce. A pill is
+  always in the skin's colours: with no hardware notch to match, it was black, and its shoulders appeared on opening.
+  An open dropdown closes first. With a video held it moves at once and the video goes
   with it (a real window can't rise with the notch); a full-screen video is never held or offered, so it stays. Displays without a notch get a pill showing the **ticker** (time, music, battery, weather, next
   event, one line at a time; Settings › Display).
 - **Captions:** the answer replaces the Today list under the time, stays a reading pause, then closes. A reply never
@@ -68,7 +71,13 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
   morphed in one go, the shapes slid across each other. A tray's window covers
   every stage and takes clicks only over the tray. A window dragged over a tray shows its app's icon in the next
   empty place.
-- Letting go puts a window back where it was; quitting Jarvis puts every held window back.
+- Letting go puts a window back where it was; quitting Jarvis puts every held window back. SIGTERM and SIGINT
+  (`pkill`, `kill`) quit the same way: killed outright, held windows stayed off the edge.
+- **Strays** (`SideDock.isStranded`, `rescueStrays`): a window off an edge the way a held one waits (12 pt or less
+  showing) that isn't held is brought back, centred. Left by a crash, or by macOS moving windows that are off every
+  edge while the displays sleep; before, it stayed off the screen until its app was hidden and shown again. Looked
+  for at launch, after waking or a display change, and on changing desktops (only the desktop showing can be seen).
+  A held window macOS nudged but left off the edge is held again, not forgotten (`prune`).
 - Picking a held window in Mission Control pops it out like its card does, and the first move of the pointer away
   (not onto it) sends it back: it was never under the pointer, so otherwise it stayed out. ⌘-Tab still waits for the
   pointer to have been on it, since you'd move toward it to use it.

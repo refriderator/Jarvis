@@ -97,17 +97,25 @@ final class NotchHop {
 extension EnvironmentValues {
     /// Tabs beside a hardware notch slide in behind it (`NotchHop.tabsTucked`).
     @Entry var tabsTucked = false
+    /// How much taller the hop draws the notch (`NotchHop.stretch`), for content that grows its own shape instead of
+    /// being scaled (`Hopping.scales` off): 1 at rest.
+    @Entry var hopStretch: CGFloat = 1
 }
 
 /// Draws `content` as high (and as stretched) as the hop has it. Read in a body, so it follows the hop.
+/// `scales` off, the content isn't scaled but given the stretch (`hopStretch`) to grow its own shape with: scaled,
+/// the pill's shoulders and text at its top squashed and sprang with the bounce, so its top edge looked like it
+/// moved, where only the bottom should.
 struct Hopping<Content: View>: View {
     let hop: NotchHop
+    var scales = true
     let content: Content
 
     var body: some View {
         content
-            .scaleEffect(x: 1, y: hop.stretch, anchor: .top)
+            .scaleEffect(x: 1, y: scales ? hop.stretch : 1, anchor: .top)
             .offset(y: -hop.lift)
             .environment(\.tabsTucked, hop.tabsTucked)
+            .environment(\.hopStretch, scales ? 1 : hop.stretch)
     }
 }

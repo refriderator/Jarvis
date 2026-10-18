@@ -18,10 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var relay: ToolRelay.Server?
     private let settingsWindow = WindowPresenter()
     private let welcomeWindow = WindowPresenter()
+    /// SIGTERM and SIGINT (`pkill`, `kill`, Ctrl-C) quit the normal way, so held windows go back first: killed
+    /// outright, they stayed off the edge of the screen.
+    private var quitSignals: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Accessory app: no Dock icon, notch and menu keep working.
         NSApp.setActivationPolicy(.accessory)
+        for number in [SIGTERM, SIGINT] {
+            signal(number, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+            source.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+            source.resume()
+            quitSignals.append(source)
+        }
         let music = MusicAppsPlayer()
         let weather = OpenMeteoWeather(locator: CurrentLocation())
         let feed = WidgetFeed(state: state, player: music, weather: weather, calendar: calendar,

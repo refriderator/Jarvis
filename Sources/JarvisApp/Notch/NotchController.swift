@@ -74,7 +74,7 @@ final class NotchController {
             // SwiftUI's global frame is measured from the panel's top-left corner, y going down.
             CGRect(x: panel.frame.minX + rect.minX, y: panel.frame.maxY - rect.maxY, width: rect.width, height: rect.height)
         }
-        panel.contentView = NSHostingView(rootView: Hopping(hop: hop, content: NotchView(
+        panel.contentView = NSHostingView(rootView: Hopping(hop: hop, scales: false, content: NotchView(
             state: state, feed: feed, assistant: assistant, voice: voice, dock: dock, monitor: monitor, browser: browser,
             video: video, openSettings: openSettings, cancelTimer: cancelTimer)))
         shownDisplay = state.settings.notchDisplay
