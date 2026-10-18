@@ -13,12 +13,12 @@ struct MacAdviceTests {
         let advice = MacAdvice.for(mac(memory: 24))
         #expect(advice.fit == .great)
         #expect(advice.localBrain == .builtIn)
-        #expect(advice.model?.id == "qwen3-8b")
+        #expect(advice.model?.id == "jarvis-4b")
         #expect(advice.warnings.contains { $0.contains("battery") })
     }
 
     @Test func sixteenGigsGetTheFourB() {
-        #expect(MacAdvice.for(mac(memory: 16)).model?.id == "qwen3-4b")
+        #expect(MacAdvice.for(mac(memory: 16)).model?.id == "jarvis-4b")
     }
 
     @Test func eightGigsStayOnAppleIntelligence() {

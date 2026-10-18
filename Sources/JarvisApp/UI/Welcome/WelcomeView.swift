@@ -102,7 +102,10 @@ struct WelcomeView: View {
         case .voice:
             VoiceTab(state: state).formStyle(.grouped)
         case .brains:
-            ConnectionsTab(state: state, downloader: downloader, compact: true).formStyle(.grouped)
+            VStack(spacing: 0) {
+                BrainsAdvice(state: state)
+                ConnectionsTab(state: state, downloader: downloader, compact: true).formStyle(.grouped)
+            }
         case .start:
             StartStep(state: state, name: name)
         }
@@ -200,6 +203,35 @@ struct NameField: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// The welcome's advice on brains: what's recommended, and that a cloud brain is optional.
+private struct BrainsAdvice: View {
+    let state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("**Recommended:** pick *Built-in model* and download **Jarvis 4B (trained)**. It's tuned for "
+                     + "\(AssistantName.display(state.settings.assistantName))'s own jobs and runs free and private on this Mac.")
+            } icon: {
+                Image(systemName: "star.fill").foregroundStyle(state.skin.accent)
+            }
+            Label {
+                Text("**Recommended, not required:** connect the ChatGPT app (Codex) or Claude as the cloud brain for "
+                     + "bigger questions. You can skip this and add one later in Settings.")
+            } icon: {
+                Image(systemName: "cloud").foregroundStyle(state.skin.accent)
+            }
+        }
+        .font(.callout)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 }
 
