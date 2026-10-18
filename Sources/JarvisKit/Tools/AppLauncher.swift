@@ -7,8 +7,10 @@ public protocol AppFinder {
     func find(_ spoken: String) -> (name: String, url: URL)?
 }
 
-/// Looks in the usual Applications folders. Spoken short names ("word", "chrome") come from a small table;
-/// otherwise the name must match an installed app exactly, or be the start of exactly one app's name.
+/// Looks in the usual Applications folders, and one folder deep in /Applications ("U of T/Microsoft OneNote.app"):
+/// people file apps in folders, and those were never found. Spoken short names ("word", "chrome") come from a small
+/// table; otherwise the name must match an installed app (spaces and a leading maker ignored, so "one note" and
+/// "onenote" both find Microsoft OneNote), or be the start of exactly one app's name.
 @MainActor
 public final class InstalledApps: AppFinder {
     private static let aliases = ["word": "Microsoft Word", "excel": "Microsoft Excel", "powerpoint": "Microsoft PowerPoint",
@@ -30,8 +32,23 @@ public final class InstalledApps: AppFinder {
                 found[String(item.dropLast(4))] = URL(fileURLWithPath: folder).appending(path: item)
             }
         }
+        // A folder of apps inside /Applications; an app at the top keeps its place if the same name is in a folder too.
+        let top = (try? FileManager.default.contentsOfDirectory(atPath: "/Applications")) ?? []
+        for sub in top where !sub.hasSuffix(".app") && !sub.hasPrefix(".") && sub != "Utilities" {
+            let folder = "/Applications/" + sub
+            for item in (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? [] where item.hasSuffix(".app") {
+                let name = String(item.dropLast(4))
+                if found[name] == nil { found[name] = URL(fileURLWithPath: folder).appending(path: item) }
+            }
+        }
         cache = found
         return found
+    }
+
+    nonisolated static func squash(_ name: String) -> String { name.lowercased().filter { $0.isLetter || $0.isNumber } }
+
+    nonisolated static func dropMaker(_ name: String) -> String {
+        name.replacingOccurrences(of: #"^(Microsoft|Google|Apple|Adobe)\s+"#, with: "", options: .regularExpression)
     }
 
     public func find(_ spoken: String) -> (name: String, url: URL)? {
@@ -40,6 +57,10 @@ public final class InstalledApps: AppFinder {
         guard !words.isEmpty else { return nil }
         let wanted = Self.aliases[words] ?? words
         if let exact = all.first(where: { $0.key.lowercased() == wanted.lowercased() }) { return (exact.key, exact.value) }
+        // "one note", "onenote" for Microsoft OneNote: spaces and the maker's name don't count.
+        let key = Self.squash(wanted)
+        let loose = all.filter { key.count >= 4 && (Self.squash($0.key) == key || Self.squash(Self.dropMaker($0.key)) == key) }
+        if loose.count == 1 { return loose.first.map { ($0.key, $0.value) } }
         let starts = all.filter { $0.key.lowercased().hasPrefix(wanted.lowercased() + " ") }
         if starts.count == 1 { return starts.first.map { ($0.key, $0.value) } }
         // "whats" for WhatsApp: a longer start of one name, when nothing else starts the same way.

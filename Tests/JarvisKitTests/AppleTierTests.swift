@@ -222,3 +222,12 @@ struct AppleTierTests {
         #expect(parts.allSatisfy { $0.count <= TextJob.partChars })
     }
 }
+
+struct AppNameTests {
+    @Test func spacesAndTheMakerDontCount() {
+        #expect(InstalledApps.squash("one note") == InstalledApps.squash("OneNote"))
+        #expect(InstalledApps.squash(InstalledApps.dropMaker("Microsoft OneNote")) == "onenote")
+        #expect(InstalledApps.dropMaker("Google Chrome") == "Chrome")
+        #expect(InstalledApps.dropMaker("Notes") == "Notes")
+    }
+}
