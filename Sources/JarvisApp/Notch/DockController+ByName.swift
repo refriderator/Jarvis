@@ -31,9 +31,12 @@ extension DockController {
         return shown.count == 1 ? "Put \(name) in the dock." : "Put \(shown.count) \(name) windows in the dock."
     }
 
-    /// Brings the named app's window back out of the strip (or off its side), as clicking it does.
+    /// Brings the named app's window back out of the strip (or off its side), as clicking it does. Looks through
+    /// every held window, this desktop's first: each display has its own desktop, so one held on another
+    /// screen isn't in `shownApps`.
     func undockWindow(of appName: String) throws -> String {
-        let held = state.dock.shownApps
+        let shown = state.dock.shownApps
+        let held = shown + state.dock.apps.filter { app in !shown.contains { $0.id == app.id } }
         let name = appName.lowercased()
         guard let app = held.first(where: { $0.appName.lowercased() == name })
                 ?? held.first(where: { $0.appName.lowercased().hasPrefix(name) }) else {

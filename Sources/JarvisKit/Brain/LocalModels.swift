@@ -31,6 +31,12 @@ public enum LocalModels {
         qwen3("14b", file: "Qwen3-14B-Q4_K_M.gguf", bytes: 9_001_752_960, minMemoryGB: 32),
         // Qwen3 8B fine-tuned on Jarvis's own tools. Not downloadable: listed in Settings only once its file is in
         // `folder` (its fine-tuning lives outside this repo), and never recommended.
+        // Qwen3 4B fine-tuned on the smaller job (timers, apps, Quick Dock, maths, handing on): v15b scored 340/340 on
+        // both eval seeds with none confidently wrong (10-17), in half the memory. Downloadable from Hugging Face; never
+        // recommended (`recommended` skips trained models), so it's chosen by hand.
+        LocalModel(id: "jarvis-4b", name: "Jarvis 4B (trained)", fileName: "Jarvis-4B-Q4_K_M.gguf",
+                   url: URL(string: "https://huggingface.co/refriderator/jarvis-qwen3-4b/resolve/main/Jarvis-4B-Q4_K_M.gguf")!,
+                   bytes: 2_497_280_672, minMemoryGB: 16),
         LocalModel(id: "jarvis-8b", name: "Jarvis 8B (trained)", fileName: "Jarvis-8B-Q4_K_M.gguf", url: nil,
                    bytes: 5_027_783_904, minMemoryGB: 24),
     ]
@@ -42,7 +48,7 @@ public enum LocalModels {
 
     /// The biggest model that fits this Mac's memory.
     public static func recommended(memoryGB: Int = Int(ProcessInfo.processInfo.physicalMemory >> 30)) -> LocalModel {
-        all.last { $0.url != nil && $0.minMemoryGB <= memoryGB } ?? all[0]
+        all.last { $0.url != nil && !$0.id.hasPrefix("jarvis-") && $0.minMemoryGB <= memoryGB } ?? all[0]
     }
 
     public static var folder: URL {
@@ -53,7 +59,7 @@ public enum LocalModels {
 
     public static func isInstalled(_ model: LocalModel) -> Bool {
         guard let size = (try? fileURL(model).resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }) else { return false }
-        // A trained model's size changes with each export; any file there is it.
+        // A hand-copied trained model's size changes with each export; any file there is it.
         return model.url == nil ? size > 0 : Int64(size) == model.bytes
     }
 }
