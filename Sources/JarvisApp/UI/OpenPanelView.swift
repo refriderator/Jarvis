@@ -85,6 +85,17 @@ struct OpenPanelView: View {
             .font(.callout)
             .frame(height: state.layout.notch.height + NotchLayout.bandPad)
             .padding(.trailing, 6)
+            .overlay {
+                // Centre: on a pill, a close button where the hardware notch would be (on a notched Mac that's the
+                // notch itself). Closes the way Esc does.
+                if state.layout.isPill {
+                    CloseArrows(tint: tint) {
+                        if state.dock.keep != .off { browser.pauseVideos() }
+                        state.send(.dismiss)
+                    }
+                    .offset(y: 6)
+                }
+            }
 
             HStack(alignment: .top) {
                 if let size = state.layout.openVideoSize {

@@ -38,7 +38,9 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
   always in the skin's colours: with no hardware notch to match, it was black, and its shoulders appeared on opening.
   An open dropdown closes first. With a video held it moves at once and the video goes
   with it (a real window can't rise with the notch); a full-screen video is never held or offered, so it stays. Displays without a notch get a pill showing the **ticker** (time, music, battery, weather, next
-  event, one line at a time; Settings › Display).
+  event, one line at a time; Settings › Display). Open on a pill, the dropdown has a close button (two up chevrons) at
+  the top centre, where the notch would be: with hover to open, brushing the top of an external display opens it by
+  accident, and this puts it away without moving off the whole panel or reaching for Esc.
 - **Captions:** the answer replaces the Today list under the time, stays a reading pause, then closes. A reply never
   opens a new dropdown, except when you closed it mid-answer: then it pops back once. Click a caption to keep it.
   Cloud answers have **Summarize** (`Summary`: a few points, a formula, a small chart, as JSON from the cloud brain).
