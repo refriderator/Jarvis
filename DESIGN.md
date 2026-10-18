@@ -58,6 +58,12 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - **Mission Control** (`MissionControlWatch`): Jarvis fades out while it's open. macOS doesn't announce it, so Jarvis
   checks the Dock's accessibility tree for the group with identifier "mc" (a full-screen Dock window also shows
   when the Dock is merely shown, so that test was dropped).
+- **Full screen** (`FullScreenWatch`, `FullScreen`): on a display without a hardware notch there's no menu bar under
+  a full-screen app, so the pill, its tab and the tray covered the app's own tabs. They fade out there, and pushing
+  the pointer against the top edge above them brings them out (the edge stops the pointer, so a 2 pt strip is easy
+  to hit). Told by an ordinary window exactly the display's size: a zoomed window stops under the menu bar.
+  Beside a hardware notch nothing changes: a full-screen app leaves that band black. A held video or the Web tab's
+  medium player keeps the pill out: it's what's being watched.
 
 ## Holding windows
 `JarvisKit/Dock/`, `DockController`; needs Accessibility. Settings › General "Hold windows in the notch".

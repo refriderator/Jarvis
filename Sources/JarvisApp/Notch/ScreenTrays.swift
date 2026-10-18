@@ -15,6 +15,10 @@ final class ScreenTrays {
     private var observers: [NSObjectProtocol] = []
     /// Follows the pointer while a tray is up, to open it on hover and close it after.
     private var hoverTimer: Timer?
+    /// Displays with an app full screen (`FullScreenWatch`): a tray there hides until the pointer reaches the top edge.
+    var fullScreen: Set<CGDirectDisplayID> = [] {
+        didSet { if fullScreen != oldValue { refresh() } }
+    }
 
     @MainActor
     private final class Tray {
@@ -26,6 +30,8 @@ final class ScreenTrays {
         /// A dragged window's title bar is at this display's top middle.
         var dragNear = false
         var hovering = false
+        /// Hidden up against the top edge for a full-screen app (`FullScreen`).
+        var tucked = false
 
         init(model: TrayModel, screen: NSScreen) {
             self.model = model
@@ -124,10 +130,13 @@ final class ScreenTrays {
             let desktop = Desktops.active(on: id)
             let apps = state.dock.apps.filter { $0.desktop != nil && $0.desktop == desktop }
             if tray.model.apps != apps { tray.model.apps = apps }
-            let stage: TrayStage = tray.dragNear ? .open : apps.isEmpty ? .hidden : tray.hovering ? .open : .dot
+            // Beside a hardware notch the tab sits in the black band a full-screen app leaves, so it stays.
+            tray.tucked = fullScreen.contains(id) && tray.model.layout.hardwareNotch == nil
+            let stage: TrayStage = tray.dragNear || tray.hovering ? .open : apps.isEmpty || tray.tucked ? .hidden : .dot
             show(stage, tray)
         }
-        let up = trays.values.contains { $0.model.stage != .hidden }
+        // Tucked away, the pointer is still followed, for the top edge.
+        let up = trays.values.contains { $0.model.stage != .hidden || !$0.model.apps.isEmpty }
         if up, hoverTimer == nil {
             hoverTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.trackHover() }
@@ -145,7 +154,8 @@ final class ScreenTrays {
         for tray in trays.values {
             let layout = tray.model.layout
             let zone = tray.hovering ? layout.frame(for: .open).insetBy(dx: -12, dy: -12)
-                                     : layout.frame(for: max(tray.model.stage, .dot)).insetBy(dx: -2, dy: -2)
+                     : tray.tucked ? FullScreen.edge(of: layout.screen, under: layout.frame(for: .open))
+                     : layout.frame(for: max(tray.model.stage, .dot)).insetBy(dx: -2, dy: -2)
             // The whole hardware notch counts, though the resting tab is narrower.
             let behind = layout.hardwareNotch?.insetBy(dx: -2, dy: -2) ?? .null
             let hovering = !tray.model.apps.isEmpty && (zone.contains(pointer) || behind.contains(pointer))

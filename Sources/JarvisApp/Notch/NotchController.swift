@@ -15,6 +15,9 @@ final class NotchController {
     private var pointerInside = false
     private var appliedMode: NotchMode = .idle
     private var missionControl: MissionControlWatch?
+    /// The panel is faded out while Mission Control is open, so it mustn't take clicks there either.
+    private var missionControlShowing = false
+    private var fullScreen: FullScreenWatch?
     private var draggingFile = false
     /// Room around the open panel for the skin's glow.
     private let glowMargin: CGFloat = 40
@@ -101,14 +104,17 @@ final class NotchController {
         quickDock = QuickDock(state: state, dock: dock, notice: notice.show)
         missionControl = MissionControlWatch { [weak self] showing in
             guard let self else { return }
+            missionControlShowing = showing
             quickDock?.missionControl(showing: showing)
             dock.sides.missionControl(showing: showing)
             if showing { state.send(.dismiss) }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = showing ? 0.12 : 0.25
-                panel.animator().alphaValue = showing ? 0 : 1
-            }
-            panel.ignoresMouseEvents = showing || state.notch.mode != .open
+            updateShowing()
+        }
+        // An app full screen on a display without a notch: the pill and trays there hide up against the top edge.
+        fullScreen = FullScreenWatch { [weak self] displays in
+            guard let self else { return }
+            trays?.fullScreen = displays
+            updateShowing()
         }
         observeMode()
         observeCaption()
@@ -251,7 +257,7 @@ final class NotchController {
     private func handleMouse(_ type: NSEvent.EventType) {
         let location = NSEvent.mouseLocation
         video.pointer(at: location)
-        let zone = state.layout.hotZone(for: state.notch.mode)
+        let zone = tuckedAway ? edgeZone : state.layout.hotZone(for: state.notch.mode)
         let inside = zone.contains(location)
         switch type {
         case .leftMouseDown:
@@ -277,6 +283,10 @@ final class NotchController {
     /// comes up, so a drag isn't cut short.
     private func updateMouseHandling(at location: CGPoint) {
         guard !draggingFile else { return }
+        guard !missionControlShowing, !tuckedAway else {
+            if !panel.ignoresMouseEvents { panel.ignoresMouseEvents = true }
+            return
+        }
         let onNotch = state.notch.mode == .open && state.layout.hotZone(for: .open).contains(location)
         let overTab = state.notch.mode != .open && (state.layout.showsTab && state.layout.tabFrame.contains(location)
             || state.layout.videoTabFrame?.contains(location) == true)
@@ -289,6 +299,34 @@ final class NotchController {
             && state.layout.frame(for: state.notch.mode).contains(location)
         let ignores = overVideo || (!onNotch && !overTab && !overControls && !overMedium && !(pressing && !panel.ignoresMouseEvents))
         if panel.ignoresMouseEvents != ignores { panel.ignoresMouseEvents = ignores }
+    }
+
+    // MARK: Out of the way
+
+    /// The closed pill (with its tab and ticker) is hidden: an app is full screen on its display (`FullScreen`).
+    /// Held videos and the Web tab's medium player stay: they're what's being watched.
+    private var tuckedAway: Bool {
+        guard state.notch.mode == .idle, state.layout.isPill, !state.video.held, state.layout.mediumVideoSize == nil,
+              let id = state.notchScreen?.displayID else { return false }
+        return fullScreen?.displays.contains(id) == true
+    }
+
+    /// Tucked away, only the top edge above the pill (and its tab) brings it out.
+    private var edgeZone: CGRect {
+        guard let screen = state.notchScreen else { return .null }
+        return FullScreen.edge(of: screen.frame, under: state.layout.hotZone(for: .idle))
+    }
+
+    /// Fades the panel out for Mission Control or a full-screen app, and back in; hidden, it takes no clicks.
+    private func updateShowing() {
+        let hidden = missionControlShowing || tuckedAway
+        if panel.alphaValue != (hidden ? 0 : 1) {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = hidden ? 0.12 : 0.25
+                panel.animator().alphaValue = hidden ? 0 : 1
+            }
+        }
+        updateMouseHandling(at: NSEvent.mouseLocation)
     }
 
     /// A file being dragged out of the Finder tab: the panel takes the drop only over the notch itself, so a
@@ -386,7 +424,7 @@ final class NotchController {
 
     private func applyMode() {
         let isOpen = state.notch.mode == .open
-        updateMouseHandling(at: NSEvent.mouseLocation)
+        updateShowing()
         video.modeChanged(to: state.notch.mode)
         returnFocus?.cancel()
         if isOpen {
