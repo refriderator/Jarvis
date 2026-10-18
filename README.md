@@ -39,6 +39,10 @@ Stuck?
 
 Next time, open Jarvis from Applications.
 
+Recommended during setup: under **Who answers**, choose the built-in model and download **Jarvis 4B (trained)**
+(the default on Macs with 16 GB of memory or more). Connecting the **ChatGPT app** (Codex) or **Claude** is also
+recommended, but not required.
+
 ## Use it
 
 - **Click the notch** and type, or press the mic.
