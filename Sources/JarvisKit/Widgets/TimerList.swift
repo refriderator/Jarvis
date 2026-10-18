@@ -6,6 +6,8 @@ public struct TimerRow: Identifiable, Equatable, Sendable {
     public let title: String
     /// A countdown ("4:59") for a timer, or the time it goes off ("7:00 AM", "7:00 AM tomorrow") otherwise.
     public let value: String
+    /// How much of a timer is left, 1 to 0, for its bar; nil for a reminder or alarm, which only has a time.
+    public var progress: Double? = nil
 }
 
 /// The rows above "TODAY", soonest first, like Jarvis Private's hub.
@@ -17,8 +19,15 @@ public enum TimerList {
                 return TimerRow(id: timer.id, title: title, value: clock(timer.ends, now: now))
             }
             let title = timer.label.prefix(1).uppercased() + timer.label.dropFirst() + " timer"
-            return TimerRow(id: timer.id, title: title, value: countdown(timer.ends.timeIntervalSince(now)))
+            return TimerRow(id: timer.id, title: title, value: countdown(timer.ends.timeIntervalSince(now)),
+                            progress: left(timer, now: now))
         }
+    }
+
+    /// How much of a timer is left, 1 at the start to 0 when it goes off; nil for a reminder or alarm.
+    public static func left(_ timer: JarvisTimer, now: Date) -> Double? {
+        guard !timer.alarm, timer.note == nil, timer.seconds > 0 else { return nil }
+        return Swift.min(1, Swift.max(0, timer.ends.timeIntervalSince(now) / Double(timer.seconds)))
     }
 
     /// "4:59", or "1:04:59" past an hour.

@@ -36,8 +36,18 @@ public struct NotchLayout: Sendable, Equatable {
     public static let agendaHeaderHeight: CGFloat = 18
     /// Space between the bottom of the list and the music row.
     public static let agendaGap: CGFloat = 6
+    /// Space between the timer rows and the "TODAY" heading under them: with none, the heading sat on the last timer.
+    public static let timersGap: CGFloat = 8
     /// Extra room around the pointer target so it is easy to hit.
     public var hoverSlop: CGFloat = 6
+    /// Around the closed pill, far less: it sits over other apps' tab strips and toolbars (in full screen there's no
+    /// menu bar under it), so 6 pt opened it while reaching for a browser tab.
+    public static let pillSlop: CGFloat = 2
+    /// The pill on a display without a notch: small enough to sit inside the menu bar, and over as little of a
+    /// full-screen app's top edge as possible. It was 180 pt wide and the menu bar's height.
+    public static let pillSize = CGSize(width: 140, height: 22)
+    /// Space under the pill's text, more than above it: the timer's bar sits there.
+    public static let pillBottom: CGFloat = 4
     /// A held video's width over height (nil when none is held). Closed, the notch grows down around it as a
     /// mini player as wide as the notch; open, it takes the music row's place.
     public var videoAspect: CGFloat?
@@ -213,7 +223,8 @@ public struct NotchLayout: Sendable, Equatable {
     /// The timer rows, then the "TODAY" heading and its rows; 0 when there are none.
     public var agendaHeight: CGFloat {
         guard timerRows + agendaRows > 0 else { return 0 }
-        return (agendaRows == 0 ? 0 : Self.agendaHeaderHeight) + CGFloat(timerRows + agendaRows) * Self.agendaRowHeight + Self.agendaGap
+        return (agendaRows == 0 ? 0 : Self.agendaHeaderHeight) + CGFloat(timerRows + agendaRows) * Self.agendaRowHeight
+            + (timerRows > 0 && agendaRows > 0 ? Self.timersGap : 0) + Self.agendaGap
     }
 
     /// The first beat of opening: the notch's width, a little deeper.
@@ -243,7 +254,8 @@ public struct NotchLayout: Sendable, Equatable {
         let closed = mode != .open && videoAspect != nil ? notch : frame(for: mode)
         // The tab beside the closed notch opens it too; what's in the tab is in the dropdown as well.
         let frame = mode != .open && showsTab ? closed.union(tabFrame) : closed
-        return frame.insetBy(dx: -hoverSlop, dy: -hoverSlop)
+        let slop = isPill && mode != .open ? Self.pillSlop : hoverSlop
+        return frame.insetBy(dx: -slop, dy: -slop)
     }
 
     /// Finds the notch from what NSScreen reports. `leftArea`/`rightArea` are
@@ -256,7 +268,7 @@ public struct NotchLayout: Sendable, Equatable {
             return CGRect(x: left.maxX, y: screenFrame.maxY - safeAreaTop,
                           width: right.minX - left.maxX, height: safeAreaTop)
         }
-        let pill = CGSize(width: 180, height: menuBarHeight)
+        let pill = CGSize(width: pillSize.width, height: min(pillSize.height, menuBarHeight))
         return CGRect(x: screenFrame.midX - pill.width / 2, y: screenFrame.maxY - pill.height,
                       width: pill.width, height: pill.height)
     }

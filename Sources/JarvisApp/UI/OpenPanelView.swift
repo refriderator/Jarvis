@@ -171,6 +171,7 @@ struct OpenPanelView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !state.timers.isEmpty {
                         TimerRows(timers: state.timers, tint: tint, accent: state.skin.accent, cancel: cancelTimer)
+                            .padding(.bottom, showsToday ? NotchLayout.timersGap : 0)
                     }
                     if showsToday {
                         AgendaList(agenda: state.agenda, due: state.due, tint: tint)

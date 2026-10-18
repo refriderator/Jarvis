@@ -24,6 +24,10 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 ## Notch
 - States **idle → peek → open**. Open on hover, or on click with hover only peeking (Settings › General).
 - Closes when the pointer leaves, a click lands outside, or Esc. While a caption is up, the pointer leaving doesn't close it.
+- Opened by the pointer it doesn't take the keyboard; clicking the search field does, and so does opening with the
+  type shortcut or the menu (`summoned`). Giving the keyboard back on closing means hiding the panel for a frame
+  (asking the app in front for it, or raising its window, didn't work: it's already the active app), and on a pill
+  that replayed its appearance just after it closed.
 - Sits on the Mac's own display unless another is picked (kept by vendor, model and serial, so it comes back to the
   right monitor). Moving it rises off one display and drops onto the other with a bounce (`NotchHop`), and every
   tray does the same. Only where there's no hardware notch: beside one, the closed notch is drawn as that notch and

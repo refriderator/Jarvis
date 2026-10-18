@@ -39,12 +39,19 @@ public struct NotchStateMachine: Sendable, Equatable {
     /// Hovering opens even with the click trigger: nothing can be clicked mid-drag, and a tucked window
     /// comes back on hover.
     public var openOnHover = false
+    /// Open because of a `summon` (the type shortcut, the menu, a reply), not the pointer: only then does opening
+    /// take the keyboard, so you can type at once.
+    public private(set) var summoned = false
 
     public init(trigger: OpenTrigger = .click) {
         self.trigger = trigger
     }
 
     public mutating func handle(_ event: NotchEvent) {
+        let was = mode
+        defer {
+            if mode != .open { summoned = false } else if was != .open { summoned = { if case .summon = event { true } else { false } }() }
+        }
         switch (event, mode) {
         case (.pointerExited, .open) where holdOpen || locked, (.click(inside: false), .open) where locked:
             break

@@ -18,6 +18,9 @@ enum NotchMotion {
     static let expand = Animation.spring(duration: 0.55, bounce: 0.18)
     /// Narrowing on close: smooth, with no swell or bounce before it pulls in.
     static let collapse = Animation.easeInOut(duration: 0.3)
+    /// Seconds into the narrowing when the retract starts, so the two blend into one move. Waiting for the narrowing
+    /// to finish, the notch came to a stop between them and closing read as two pumps.
+    static let retractDelay: Duration = .milliseconds(140)
     /// The last step up into the notch: slow and smooth, no bounce.
     static let retractSeconds = 0.5
     static let retract = Animation.easeInOut(duration: retractSeconds)

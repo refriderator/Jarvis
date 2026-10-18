@@ -164,6 +164,10 @@ struct TimerListTests {
         #expect(rows.map(\.title) == ["5 minute timer", "Call mom", "Reminder"])
         #expect(rows[0].value == "5:00")
         #expect(rows[2].value.hasSuffix("tomorrow"))
+        // Only a timer has a bar: how much of it is left.
+        #expect(abs((rows[0].progress ?? 0) - 299.5 / 300) < 0.001)
+        #expect(rows[1].progress == nil && rows[2].progress == nil)
+        #expect(TimerList.left(timer, now: now.addingTimeInterval(400)) == 0, "never below empty")
         #expect(TimerList.countdown(3725) == "1:02:05")
     }
 }

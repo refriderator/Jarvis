@@ -1,6 +1,9 @@
 import AppKit
 import JarvisKit
+import os
 import SwiftUI
+
+private let log = Logger(subsystem: "jarvis.notch", category: "focus")
 
 /// Owns the notch panel. Turns pointer and key events into `NotchEvent`s and
 /// keeps the panel's mouse/key behavior in step with the current mode.
@@ -35,6 +38,9 @@ final class NotchController {
     /// The reading pause ended while the pointer was on the panel; leaving it ends the caption.
     private var captionWaitsForPointer = false
     private var returnFocus: DispatchWorkItem?
+    /// The app in front when the notch opened: the panel doesn't activate Jarvis, so it's still the active app,
+    /// and closing gives it its key window back.
+    private var focusedBefore: NSRunningApplication?
     /// Keeps the ticker's weather and next event fresh while the notch is a pill (see `WidgetFeed.tickerRefresh`).
     private var tickerTimer: Timer?
     /// Long enough for the closing animation (see `NotchMotion`) to finish.
@@ -387,7 +393,15 @@ final class NotchController {
             // Only on the Today tab does opening take the keyboard; Finder and Monitor are for looking and dragging.
             // Holding a video, opening never takes the keyboard: giving it back means hiding the panel for a frame,
             // which shows as a flash on the mini player.
-            if state.dock.tab == .today && state.dock.dragging == nil && !state.video.held { panel.makeKey() }
+            //
+            // Opened by the pointer (hovering or clicking the notch) it doesn't take the keyboard either: clicking the
+            // search field does (`becomesKeyOnlyIfNeeded`). Giving the keyboard back on closing hides the panel for a
+            // frame, which on a pill replayed its appearance, a second animation just after the close. Summoned
+            // (the type shortcut, the menu), it takes the keyboard so you can type at once.
+            focusedBefore = NSWorkspace.shared.frontmostApplication.flatMap { $0 == .current ? nil : $0 }
+            if state.dock.tab == .today && state.dock.dragging == nil && !state.video.held && state.notch.summoned {
+                panel.makeKey()
+            }
             feed.panelOpened()
         } else {
             // Once it has shrunk back into the notch: clear the caption (so the list isn't seen coming back
@@ -399,8 +413,23 @@ final class NotchController {
                 if state.turns.last?.isPending != true { state.endCaption() }
                 // Never with a video held: the mini player would blink for that frame.
                 guard panel.isKeyWindow, !state.video.held else { return }
-                panel.orderOut(nil)
-                panel.orderFrontRegardless()
+                // First by making the app in front's window its main window again (Accessibility, as window managers
+                // do), so it takes its key window back and the panel stays showing. Activating the app didn't: it's
+                // already the active app, so nothing changed. Hiding the panel for a frame works too, but on a pill
+                // (no hardware notch to hide behind) that blink showed as the notch flashing just after it closed:
+                // only if the app doesn't take it back.
+                if let app = focusedBefore, let window = dock.windows.frontWindow(pid: app.processIdentifier) {
+                    dock.windows.raise(window, activate: true)
+                }
+                focusedBefore = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    guard let self, state.notch.mode != .open, panel.isKeyWindow else {
+                        return log.notice("focus handed back without hiding the panel")
+                    }
+                    log.notice("focus handed back by hiding the panel for a frame")
+                    panel.orderOut(nil)
+                    panel.orderFrontRegardless()
+                }
             }
             returnFocus = tidy
             DispatchQueue.main.asyncAfter(deadline: .now() + closeAnimationSeconds, execute: tidy)

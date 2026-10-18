@@ -67,4 +67,17 @@ struct CaptionHoldTests {
         notch.handle(.pointerExited)
         #expect(notch.mode == .idle)
     }
+
+    @Test func onlyASummonCountsAsSummoned() {
+        var machine = NotchStateMachine(trigger: .hover)
+        machine.handle(.pointerEntered)
+        #expect(machine.mode == .open && !machine.summoned, "hovered open: the pointer, not a summon")
+        machine.handle(.summon)
+        #expect(!machine.summoned, "already open: still the pointer's")
+        machine.handle(.dismiss)
+        machine.handle(.summon)
+        #expect(machine.mode == .open && machine.summoned)
+        machine.handle(.pointerExited)
+        #expect(machine.mode == .idle && !machine.summoned)
+    }
 }

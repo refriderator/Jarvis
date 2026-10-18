@@ -18,7 +18,30 @@ struct NotchLayoutTests {
                                          leftArea: nil, rightArea: nil, menuBarHeight: 24)
         #expect(pill.midX == screen.midX)
         #expect(pill.maxY == screen.maxY)
-        #expect(pill.height == 24)
+        #expect(pill.size == NotchLayout.pillSize, "smaller than the menu bar")
+        let thin = NotchLayout.notchRect(screenFrame: screen, safeAreaTop: 0, leftArea: nil, rightArea: nil, menuBarHeight: 16)
+        #expect(thin.height == 16, "never taller than the menu bar")
+    }
+
+    @Test func timersAndTodayHaveAGapBetweenThem() {
+        var layout = NotchLayout(notch: CGRect(x: 660, y: 950, width: 192, height: 32))
+        layout.timerRows = 1
+        let timersOnly = layout.agendaHeight
+        layout.agendaRows = 1
+        #expect(layout.agendaHeight == timersOnly + NotchLayout.agendaHeaderHeight + NotchLayout.agendaRowHeight
+                + NotchLayout.timersGap, "the TODAY heading doesn't sit on the last timer")
+    }
+
+    @Test func theClosedPillOnlyOpensRightOverIt() {
+        var layout = NotchLayout(notch: NotchLayout.notchRect(screenFrame: screen, safeAreaTop: 0, leftArea: nil,
+                                                               rightArea: nil, menuBarHeight: 24))
+        layout.isPill = true
+        let pill = layout.notch
+        #expect(layout.hotZone(for: .idle).contains(CGPoint(x: pill.midX, y: pill.minY - 1)))
+        #expect(!layout.hotZone(for: .idle).contains(CGPoint(x: pill.midX, y: pill.minY - 4)),
+                "a few points below it is the app's tab strip")
+        #expect(layout.hotZone(for: .open).contains(CGPoint(x: pill.midX, y: layout.frame(for: .open).minY - 4)),
+                "open, the dropdown keeps the usual margin")
     }
 
     @Test func everyModeHangsFromTheNotchTopAndStaysCentered() {

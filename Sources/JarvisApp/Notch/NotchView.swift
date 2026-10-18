@@ -128,7 +128,10 @@ struct NotchView: View {
                 withAnimation(NotchMotion.expand) { stage = .open }
             }
         case .idle where stage == .open:
-            withAnimation(NotchMotion.collapse) { stage = .drop } completion: {
+            withAnimation(NotchMotion.collapse) { stage = .drop }
+            Task {
+                // Starts retracting partway through the narrowing; SwiftUI blends the two from where it is.
+                try? await Task.sleep(for: NotchMotion.retractDelay)
                 guard move == current else { return }
                 withAnimation(NotchMotion.retract) { stage = .idle }
             }
