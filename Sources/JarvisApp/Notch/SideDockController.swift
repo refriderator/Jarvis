@@ -8,8 +8,8 @@ private let log = Logger(subsystem: "jarvis.dock", category: "sides")
 struct ParkedWindow: Identifiable {
     let id = UUID()
     let window: ForeignWindow
-    /// Where it was before it was held, to give it back there.
-    let original: CGRect
+    /// Where it was before it was held, to give it back there (moved with its display when displays are rearranged).
+    var original: CGRect
     var side: ScreenSide
     var display: CGDirectDisplayID?
     var desktop: Int?
@@ -83,6 +83,10 @@ final class SideDockController {
     private var homes: [Home] = []
     /// The window being slid, from where to where, since when, and what to do once it's there.
     private var slide: (window: ForeignWindow, start: CGRect, target: CGRect, began: Date, done: (CGRect?) -> Void)?
+    /// Each display's frame as last seen, so held windows can follow their display when displays are rearranged.
+    private var displayFrames = SideDockController.currentDisplayFrames()
+    /// Displays just changed: until held windows are back off their sides, ones macOS moved aren't forgotten (`prune`).
+    private var rearranging = false
 
     init(state: AppState, windows: WindowControlling) {
         self.state = state
@@ -106,6 +110,9 @@ final class SideDockController {
                                             queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.notPickedAt = Date() }
         })
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.displaysChanged() } })
     }
 
     // MARK: Holding
@@ -572,6 +579,7 @@ final class SideDockController {
 
     /// Forgets windows that closed, or that were moved back onto the screen some other way.
     private func prune() {
+        guard !rearranging else { return }
         let gone = parked.filter { item in
             guard let frame = windows.frame(of: item.window) else { return true }
             guard popped?.id != item.id, sliding == nil else { return false }
@@ -584,6 +592,58 @@ final class SideDockController {
         guard !gone.isEmpty else { return }
         if let id = popped?.id, gone.contains(where: { $0.id == id }) { poppedGone() }
         parked.removeAll { item in gone.contains { $0.id == item.id } }
+    }
+
+    // MARK: Displays
+
+    /// Displays were rearranged, plugged in or out, or changed size. macOS moves windows with their display, but
+    /// snaps one that's off every edge to wherever it likes, so each held window is put back off its side at the
+    /// display's new place, after a moment for macOS to finish. One whose display is gone, or whose side now touches
+    /// another display (it would show there), is let go, back where it was.
+    private func displaysChanged() {
+        rearranging = true
+        hideCards()
+        sliding?.invalidate()
+        sliding = nil
+        slide = nil
+        popped = nil
+        poppedFrom = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.followDisplays() }
+    }
+
+    private func followDisplays() {
+        let before = displayFrames
+        displayFrames = Self.currentDisplayFrames()
+        let all = NSScreen.screens.map(\.frame)
+        for item in parked {
+            guard let index = parked.firstIndex(where: { $0.id == item.id }) else { continue }
+            let screen = NSScreen.screens.first { $0.displayID != nil && $0.displayID == item.display }
+            var original = item.original
+            var parkedAt = item.parkedAt
+            if let screen, let id = item.display, let was = before[id] {
+                let dx = screen.frame.minX - was.minX, dy = screen.frame.minY - was.minY
+                original = original.offsetBy(dx: dx, dy: dy)
+                parkedAt = parkedAt.offsetBy(dx: dx, dy: dy)
+            }
+            guard let screen, SideDock.freeSides(of: screen.frame, others: all).contains(item.side) else {
+                unpark(item.window)
+                let size = windows.frame(of: item.window)?.size ?? original.size
+                let visible = all.contains { $0.intersects(original) } ? nil : (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+                windows.setFrame(visible.map { SideDock.released(size, visible: $0) } ?? original, of: item.window)
+                continue
+            }
+            let size = windows.frame(of: item.window)?.size ?? parkedAt.size
+            let target = SideDock.parked(CGRect(origin: parkedAt.origin, size: size), side: item.side, screen: screen.frame,
+                                         visible: screen.visibleFrame, others: Self.otherScreens(screen))
+            parked[index].original = original
+            parked[index].parkedAt = windows.setFrame(target, of: item.window) ?? target
+        }
+        rearranging = false
+    }
+
+    private static func currentDisplayFrames() -> [CGDirectDisplayID: CGRect] {
+        Dictionary(NSScreen.screens.compactMap { screen in screen.displayID.map { ($0, screen.frame) } },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     private static func otherScreens(_ screen: NSScreen) -> [CGRect] {

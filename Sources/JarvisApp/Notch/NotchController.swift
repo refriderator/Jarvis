@@ -84,7 +84,11 @@ final class NotchController {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.relayout() }
+            // Rearranged displays move the notch, so a video held in it goes with it.
+            MainActor.assumeIsolated {
+                self?.relayout()
+                self?.video.displayChanged()
+            }
         }
         // Jarvis steps out of the way of Mission Control and comes back after it.
         trays = ScreenTrays(state: state, dock: dock)

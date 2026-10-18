@@ -19,12 +19,15 @@ enum NotchMotion {
     /// Narrowing on close: smooth, with no swell or bounce before it pulls in.
     static let collapse = Animation.easeInOut(duration: 0.3)
     /// The last step up into the notch: slow and smooth, no bounce.
-    static let retract = Animation.easeInOut(duration: 0.5)
+    static let retractSeconds = 0.5
+    static let retract = Animation.easeInOut(duration: retractSeconds)
     static let peek = Animation.spring(duration: 0.35, bounce: 0.2)
 
-    /// The tab popping out beside the closed notch once it has closed: a quick spring with a visible bounce. SwiftUI runs it
+    /// The tab popping out beside the closed notch once it has closed: a quick spring with one small settle. It waits
+    /// for the whole retract (it starts with it): out before the end, it sprang while the dropdown's bottom edge still
+    /// showed below the notch, and a bouncier spring overshot and came back, so it read as two pumps. SwiftUI runs it
     /// at the display's full refresh rate (120 Hz on ProMotion).
-    static let tabBounce = Animation.spring(duration: 0.45, bounce: 0.55).delay(0.45)
+    static let tabBounce = Animation.spring(duration: 0.4, bounce: 0.25).delay(retractSeconds + 0.05)
     /// The tab pulled back in when the notch opens.
     static let tabIn = Animation.easeIn(duration: 0.16)
 
