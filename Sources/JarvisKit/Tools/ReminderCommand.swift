@@ -71,7 +71,7 @@ public enum ReminderCommand: Equatable, Sendable {
         guard let due else { return "Added \"\(title)\" to Reminders." }
         let calendar = Calendar.current
         let day = calendar.isDate(due.date, inSameDayAs: now) ? ""
-            : calendar.isDateInTomorrow(due.date) ? " tomorrow" : " on " + due.date.formatted(.dateTime.weekday(.wide))
+            : calendar.date(byAdding: .day, value: 1, to: now).map { calendar.isDate(due.date, inSameDayAs: $0) } == true ? " tomorrow" : " on " + due.date.formatted(.dateTime.weekday(.wide))
         guard due.hasTime else { return "Okay, \"\(title)\" is in Reminders for\(day.isEmpty ? " today" : day)." }
         return "Okay, I'll remind you at \(due.date.formatted(date: .omitted, time: .shortened))\(day) to \(title)."
     }
