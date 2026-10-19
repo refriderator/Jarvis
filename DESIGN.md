@@ -47,7 +47,8 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - **Tabs** (left of the notch): Today, Finder, Monitor, Web. Clicking the showing tab folds it away.
   - **Finder** (`FolderShelfView`): Jarvis's own folder view, starting at Downloads. Drag in and out like Finder
     (`FileDragSource`: SwiftUI's own drag only ever offered a copy, never a move). Its sidebar pins are Jarvis's own
-    (`finderPins`) because Finder's sidebar list is private to Finder. Search uses Spotlight.
+    (`finderPins`) because Finder's sidebar list is private to Finder. Search uses Spotlight. Images, PDFs and videos
+    show their picture (`FileThumbnail`, Quick Look, as Finder does); the type's icon alone showed none.
   - **Monitor**: CPU, memory, network, compressed memory and swap, from the same counters Activity Monitor reads,
     only while the tab is showing. Network is numbers, not a graph: a graph scaled to the peak made blips look huge.
   - **Web** (`BrowserController`): a small WebKit browser. The user agent says Safari, or sites call it out of date.
@@ -57,7 +58,8 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - **Keep** holds the dropdown open (and with a video held, makes the video Large).
 - **Mission Control** (`MissionControlWatch`): Jarvis fades out while it's open. macOS doesn't announce it, so Jarvis
   checks the Dock's accessibility tree for the group with identifier "mc" (a full-screen Dock window also shows
-  when the Dock is merely shown, so that test was dropped).
+  when the Dock is merely shown, so that test was dropped). The side cards don't come out while it's open: they sit
+  above it and took its clicks.
 - **Full screen** (`FullScreenWatch`, `FullScreen`): on a display without a hardware notch there's no menu bar under
   a full-screen app, so the pill, its tab and the tray covered the app's own tabs. They fade out there, and pushing
   the pointer against the top edge above them brings them out (the edge stops the pointer, so a 2 pt strip is easy

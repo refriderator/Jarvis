@@ -243,6 +243,8 @@ final class SideDockController {
         }
         let pointer = NSEvent.mouseLocation
         if dragging != nil { return trackDrag(pointer) }
+        // Mission Control is above every window but the cards': out there, they'd take its clicks.
+        if missionControlShowing { return }
         // Cards first: they can be out over a popped window (its edge touched again).
         if let showing { return trackCards(pointer, showing: showing) }
         if popped != nil { return trackPopped(pointer) }
@@ -549,7 +551,7 @@ final class SideDockController {
     /// Mission Control opened or closed (`MissionControlWatch`, through `NotchController`).
     func missionControl(showing: Bool) {
         missionControlShowing = showing
-        if !showing { missionControlClosedAt = Date() }
+        if showing { hideCards() } else { missionControlClosedAt = Date() }
     }
 
     private func poppedGone() {

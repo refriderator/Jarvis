@@ -12,6 +12,7 @@ struct FolderShelfView: View {
     @State private var targeted = false
     @State private var query = ""
     @State private var search = FileSearch()
+    @State private var thumbnails = ThumbnailCache()
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -44,7 +45,7 @@ struct FolderShelfView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 66), spacing: 4)], spacing: 6) {
                     ForEach(items) { item in
-                        ShelfItemView(item: item, tint: tint)
+                        ShelfItemView(item: item, tint: tint, thumbnails: thumbnails)
                             .overlay {
                                 FileDragSource(url: item.url, open: { dock.open(item) }, menu: { menu(for: item) },
                                                moved: dock.fileDragMoved, ended: dock.fileDragEnded)
@@ -145,12 +146,11 @@ private struct SearchField: View {
 private struct ShelfItemView: View {
     let item: ShelfItem
     let tint: Color
+    let thumbnails: ThumbnailCache
 
     var body: some View {
         VStack(spacing: 2) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
-                .resizable()
-                .frame(width: 32, height: 32)
+            FileThumbnail(url: item.url, size: 32, thumbnails: thumbnails)
             Text(item.name)
                 .font(.system(size: 9.5))
                 .lineLimit(2)
