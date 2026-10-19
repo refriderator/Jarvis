@@ -12,6 +12,16 @@ cp "$(swift build -c "$CONFIG" --show-bin-path)/Jarvis" "$APP/Contents/MacOS/Jar
 cp Support/Info.plist "$APP/Contents/Info.plist"
 # Where this copy was built from, so Settings › General › Update can pull and rebuild it.
 /usr/libexec/PlistBuddy -c "Add :JarvisSourceFolder string $(pwd)" "$APP/Contents/Info.plist"
+# The release it was built from (the latest tag, "v1.3" → 1.3) and the GitHub repository it came from, so Jarvis
+# can tell when a newer release is out. Untagged (before the first release) it stays Info.plist's 0.1.0.
+TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+if [ -n "$TAG" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${TAG#v}" "$APP/Contents/Info.plist"
+fi
+REPOSITORY="$(git remote get-url origin 2>/dev/null | sed -n 's#^.*github\.com[:/]\(.*\)$#\1#p' | sed 's#\.git$##')"
+if [ -n "$REPOSITORY" ]; then
+  /usr/libexec/PlistBuddy -c "Add :JarvisRepository string $REPOSITORY" "$APP/Contents/Info.plist"
+fi
 # The icon (redraw it with scripts/make-icon.sh).
 mkdir -p "$APP/Contents/Resources"
 cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

@@ -17,6 +17,10 @@ final class NotchController {
     private var missionControl: MissionControlWatch?
     /// The panel is faded out while Mission Control is open, so it mustn't take clicks there either.
     private var missionControlShowing = false
+    /// Mission Control's desktops bar runs along the top, over where the notch (or on another display, the pill)
+    /// is, so the pointer there is on it, not on Jarvis. After it closes (often by picking a desktop right there)
+    /// the notch waits for the pointer to leave before hover opens it again.
+    private var pointerHeldOff = false
     private var fullScreen: FullScreenWatch?
     private var draggingFile = false
     /// Room around the open panel for the skin's glow.
@@ -29,6 +33,7 @@ final class NotchController {
     private let video: VideoController
     private let notice: NoticePanel
     private var quickDock: QuickDock?
+    private var updates: UpdatePrompt?
     /// The strips on displays without the notch.
     private var trays: ScreenTrays?
     /// Moving to another display rises off one and drops onto the other.
@@ -99,14 +104,17 @@ final class NotchController {
                 self?.video.displayChanged()
             }
         }
-        // Jarvis steps out of the way of Mission Control and comes back after it.
         trays = ScreenTrays(state: state, dock: dock)
         quickDock = QuickDock(state: state, dock: dock, notice: notice.show)
+        // Its own notice, so a passing one (Quick Dock's) doesn't replace the question before it's answered.
+        updates = UpdatePrompt(state: state, notice: NoticePanel(state: state))
+        // Jarvis steps out of the way of Mission Control and comes back after it.
         missionControl = MissionControlWatch { [weak self] showing in
             guard let self else { return }
             missionControlShowing = showing
             quickDock?.missionControl(showing: showing)
             dock.sides.missionControl(showing: showing)
+            trays?.missionControl = showing
             if showing { state.send(.dismiss) }
             updateShowing()
         }
@@ -258,9 +266,12 @@ final class NotchController {
         let location = NSEvent.mouseLocation
         video.pointer(at: location)
         let zone = tuckedAway ? edgeZone : state.layout.hotZone(for: state.notch.mode)
-        let inside = zone.contains(location)
+        let over = zone.contains(location)
+        if missionControlShowing { pointerHeldOff = true } else if !over || type == .leftMouseDown { pointerHeldOff = false }
+        let inside = over && !pointerHeldOff
         switch type {
-        case .leftMouseDown:
+        // In Mission Control a press is on it (a window, a desktop), never a title-bar drag for the notch or a tray.
+        case .leftMouseDown where !missionControlShowing:
             dock.mouseDown(at: location)
             video.mouseDown(at: location)
             state.send(.click(inside: inside))

@@ -19,6 +19,15 @@ final class ScreenTrays {
     var fullScreen: Set<CGDirectDisplayID> = [] {
         didSet { if fullScreen != oldValue { refresh() } }
     }
+    /// Mission Control is open (`MissionControlWatch`): every tray goes, as the notch fades. They sit above it, so
+    /// out there they took its clicks and opened under the pointer.
+    var missionControl = false {
+        didSet {
+            guard missionControl != oldValue else { return }
+            if missionControl { trays.values.forEach { $0.heldOff = true } }
+            refresh()
+        }
+    }
 
     @MainActor
     private final class Tray {
@@ -32,6 +41,9 @@ final class ScreenTrays {
         var hovering = false
         /// Hidden up against the top edge for a full-screen app (`FullScreen`).
         var tucked = false
+        /// Since Mission Control opened, the pointer hasn't left the tray: its desktops bar is up there too, and
+        /// a desktop picked there leaves the pointer on the tray, which mustn't open for that.
+        var heldOff = false
 
         init(model: TrayModel, screen: NSScreen) {
             self.model = model
@@ -132,7 +144,8 @@ final class ScreenTrays {
             if tray.model.apps != apps { tray.model.apps = apps }
             // Beside a hardware notch the tab sits in the black band a full-screen app leaves, so it stays.
             tray.tucked = fullScreen.contains(id) && tray.model.layout.hardwareNotch == nil
-            let stage: TrayStage = tray.dragNear || tray.hovering ? .open : apps.isEmpty || tray.tucked ? .hidden : .dot
+            let stage: TrayStage = missionControl ? .hidden
+                : tray.dragNear || tray.hovering ? .open : apps.isEmpty || tray.tucked ? .hidden : .dot
             show(stage, tray)
         }
         // Tucked away, the pointer is still followed, for the top edge.
@@ -158,7 +171,9 @@ final class ScreenTrays {
                      : layout.frame(for: max(tray.model.stage, .dot)).insetBy(dx: -2, dy: -2)
             // The whole hardware notch counts, though the resting tab is narrower.
             let behind = layout.hardwareNotch?.insetBy(dx: -2, dy: -2) ?? .null
-            let hovering = !tray.model.apps.isEmpty && (zone.contains(pointer) || behind.contains(pointer))
+            let near = !tray.model.apps.isEmpty && (zone.contains(pointer) || behind.contains(pointer))
+            if !near, !missionControl { tray.heldOff = false }
+            let hovering = near && !tray.heldOff
             let onTray = tray.model.stage != .hidden && layout.frame(for: tray.model.stage).insetBy(dx: -4, dy: -4).contains(pointer)
             if tray.panel.ignoresMouseEvents == onTray { tray.panel.ignoresMouseEvents = !onTray }
             if hovering != tray.hovering {

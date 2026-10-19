@@ -34,16 +34,19 @@ struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            UpdateSection()
+            UpdateSection(state: state)
         }
     }
 }
 
 private struct UpdateSection: View {
+    let state: AppState
     @State private var error: String?
 
     var body: some View {
         Section {
+            Toggle("Tell me when there's a new version", isOn: state.binding(\.checkForUpdates))
+                .help("Asks GitHub once a day; Jarvis \(Updater.installedVersion?.description ?? "?") is installed")
             if let folder = Updater.sourceFolder {
                 Button("Update Jarvis…") {
                     do { try Updater.openUpdate() } catch { self.error = error.localizedDescription }

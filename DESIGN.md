@@ -59,7 +59,10 @@ Status: M1–M5 done (notch, settings, welcome, chat, voice, tools), plus the wi
 - **Mission Control** (`MissionControlWatch`): Jarvis fades out while it's open. macOS doesn't announce it, so Jarvis
   checks the Dock's accessibility tree for the group with identifier "mc" (a full-screen Dock window also shows
   when the Dock is merely shown, so that test was dropped). The side cards don't come out while it's open: they sit
-  above it and took its clicks.
+  above it and took its clicks. The trays on other displays go too, for the same reason (they also opened under
+  the pointer there). Its desktops bar runs along the top, right where the notch, pill and trays are on an external
+  display, so while it's open the pointer there doesn't count as hovering Jarvis and a press there isn't watched as a
+  title-bar drag. After it closes (often by picking a desktop right there) hover waits for the pointer to leave first.
 - **Full screen** (`FullScreenWatch`, `FullScreen`): on a display without a hardware notch there's no menu bar under
   a full-screen app, so the pill, its tab and the tray covered the app's own tabs. They fade out there, and pushing
   the pointer against the top edge above them brings them out (the edge stops the pointer, so a 2 pt strip is easy
@@ -156,6 +159,13 @@ Settings are one `Settings` struct saved to a file; the window is a form over it
 - **Update** (General, `Updater`): opens Terminal to `git pull` and run the installer in the folder this copy was built
   from (`bundle.sh` writes it into Info.plist as `JarvisSourceFolder`). Terminal, not the background, because the
   installer quits Jarvis, and so errors and Apple's license prompt can be seen and answered.
+- **New version notice** (`UpdatePrompt`, `Updater.newerRelease`): only tagged GitHub releases count, not every push
+  to main, so people are asked when a version is shipped, not three times a night. `bundle.sh` writes the latest tag
+  as the app's version and the `origin` repository into Info.plist; Jarvis asks GitHub's API for the latest release
+  (no account, 60 an hour allowed) a little after launch and once a day, and compares number by number (`AppVersion`:
+  as text, 1.10 sorts before 1.9). The notice has Update and Later; Later waits for the next launch. It never
+  updates by itself, since the installer quits Jarvis. Off in Settings › General, since each check tells GitHub the
+  Mac's address.
 - **Uninstall** (General, `Uninstaller`): `scripts/uninstall.sh`, copied into the app by `bundle.sh` so it works
   without the source folder, and run from a temp copy since it deletes the app. It lists what goes with sizes and
   needs `yes` typed (models can be many GB). Apps are matched by bundle id, not name. It leaves website passwords

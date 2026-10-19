@@ -7,6 +7,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var launchAtLogin = true
     public var showInMenuBar = true
     public var openTrigger: OpenTrigger = .click
+    /// Asks under the notch when a newer release is out (one request to GitHub at launch and once a day).
+    public var checkForUpdates = true
 
     /// What the assistant is called (`AssistantName`).
     public var assistantName = AssistantName.standard
